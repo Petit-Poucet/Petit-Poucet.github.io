@@ -97,7 +97,7 @@ aside{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .kv{display:grid;grid-template-columns:96px 1fr;gap:4px 8px;font-size:13px;margin:0}
 .kv dt{color:var(--dim);font-family:var(--mono);font-size:11px;text-transform:uppercase;padding-top:2px}
-.kv dd{margin:0}
+.kv dd{margin:0;overflow-wrap:anywhere;min-width:0}
 .big{font-family:var(--display);font-size:2rem;font-weight:700;line-height:1}
 .badge{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:2px;color:#0b0f18;font-weight:600}
 .chip{font-family:var(--mono);font-size:11.5px;padding:2px 7px;border:1px solid var(--line);border-radius:2px;background:var(--panel-2)}
@@ -117,7 +117,15 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 .warnline{color:var(--warn);font-size:12.5px}
 .badline{color:var(--bad);font-size:12.5px}
 #log{font-family:var(--mono);font-size:11.5px;display:grid;gap:3px;max-height:170px;overflow:auto}
-.plist{display:grid;gap:4px;font-size:13px}
+.plist{display:grid;gap:2px;font-size:13px}
+.prow{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:5px 6px;border-radius:3px}
+.prow:hover{background:var(--panel-2)}
+.prow.off{opacity:.55}
+.plink{background:none;border:0;padding:0;font:inherit;font-weight:600;color:var(--accent);cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:rgba(242,167,75,.4);text-underline-offset:3px}
+.plink:hover{text-decoration-color:var(--accent)}
+.plink:disabled{color:var(--text);text-decoration:none;cursor:default}
+.prow .where{font-size:12px;color:var(--dim);text-align:right;white-space:nowrap}
+.prow .ship{grid-column:2 / 4;font-size:11.5px;color:var(--dim);margin-top:-3px}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--line);padding:10px 16px;border-radius:3px;display:none;z-index:40;max-width:90vw}
 #toast.err{border-color:var(--bad)}
 .modal{position:fixed;inset:0;background:rgba(3,5,10,.8);display:none;align-items:center;justify-content:center;z-index:30;padding:16px}
@@ -195,6 +203,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 
     <section class="card" id="pilotsCard" hidden>
       <h2>Pilotes sur la carte</h2>
+      <p class="note">Cliquez sur un nom pour centrer la carte sur lui.</p>
       <div class="plist" id="pilotsList"></div>
     </section>
 
@@ -916,7 +925,10 @@ async function tick(){
       lastShipCheck = now;
       const sh = await esi(`/characters/${tok.charId}/ship/`, true);
       let typeName = ''; try{ typeName = (await esi(`/universe/types/${sh.ship_type_id}/`)).name; }catch(e){}
-      pilot.ship = sh.ship_name ? `${sh.ship_name} (${typeName})` : typeName; pilot.shipType = typeName;
+      // ESI renvoie parfois le nom du vaisseau sous une forme brute (u'\xb2…') : on l'ignore dans ce cas
+      let sn = String(sh.ship_name || '').trim();
+      if (/^u['"]|\\x[0-9a-f]{2}/i.test(sn)) sn = '';
+      pilot.ship = sn ? `${sn} (${typeName})` : typeName; pilot.shipType = typeName;
     }
     await arriveAt(loc.solar_system_id);
     publishPilot();
@@ -1003,7 +1015,7 @@ function startDemo(){
   if (demoMode){ stopDemo(); return; }
   stopTracking();
   savedBeforeDemo = { map, current:me.current };
-  demoMode = true; if (es){ es.close(); es = null; }
+  demoMode = true; streams.forEach(x => x.close()); streams = []; clearTimeout(reconnectT);
   map = emptyMap(); me.current = null; sel = null;
   setSync('', 'Démo');
   pilot.online = true; pilot.ship = 'Astero (démo)';
@@ -1588,9 +1600,51 @@ function renderPilot(){
   $('#pShip').textContent = pilot.ship || '–';
 }
 function renderPilots(){
-  const ps = activePilots();
-  $('#pilotsCard').hidden = !ps.length;
-  $('#pilotsList').innerHTML = ps.map(p => { const n = map.nodes[p.sys]; return `<div><span class="dot ${p.online ? 'on' : ''}"></span><b>${esc(p.name)}</b> <span class="dim">${n ? 'à ' + esc(n.name) : 'hors carte'}${p.ship ? ' · ' + esc(p.ship) : ''}</span></div>`; }).join('');
+  // Vous en premier, puis les autres pilotes : connectés d'abord, puis par nom
+  const list = [];
+  if (tok || demoMode) list.push({ id:'me', name:(tok ? tok.charName : 'Pilote de démo') + ' (vous)', sys:me.current, ship:pilot.shipType || pilot.ship, online:pilot.online, self:true });
+  activePilots().sort((a, b) => (b.online - a.online) || String(a.name).localeCompare(String(b.name))).forEach(p => list.push(p));
+  const others = list.filter(p => !p.self).length;
+  $('#pilotsCard').hidden = !(shared() || demoMode || others);
+  if (!list.length){ $('#pilotsList').innerHTML = '<span class="empty">Personne pour l\'instant.</span>'; return; }
+  $('#pilotsList').innerHTML = list.map(p => {
+    const n = p.sys != null ? map.nodes[p.sys] : null;
+    return `<div class="prow${p.online ? '' : ' off'}">
+      <span class="dot ${p.online ? 'on' : ''}" title="${p.online ? 'En jeu' : 'Hors ligne'}"></span>
+      <button type="button" class="plink" data-sys="${n ? esc(p.sys) : ''}" ${n ? '' : 'disabled'} title="${n ? 'Centrer la carte sur ' + esc(n.name) : 'Pas sur la carte'}">${esc(p.name)}</button>
+      <span class="where">${n ? esc(n.name) : 'hors carte'}</span>
+      ${p.ship ? `<span class="ship">${esc(p.ship)}</span>` : ''}
+    </div>`;
+  }).join('') + (shared() && !others ? '<span class="empty" style="padding:4px 6px">Aucun autre pilote sur la carte.</span>' : '');
+  $('#pilotsList').querySelectorAll('.plink[data-sys]:not([disabled])').forEach(b => b.addEventListener('click', () => focusSystem(b.dataset.sys)));
+}
+/* Centre la carte sur un système (vue à plat ou en volume) et le sélectionne */
+function focusSystem(id){
+  const n = map.nodes[id]; if (!n) return;
+  sel = { kind:'node', id:n.id }; lastSelKey = '';
+  if (cfg.view === 'vol'){
+    renderVolume();
+    const g = [...document.querySelectorAll('#vol .vnode')].find(x => String(x.dataset.node) === String(n.id));
+    const c = g && g.querySelector('circle:not(.halo)');
+    if (c){
+      const r = $('#vol').getBoundingClientRect();
+      vcam.px += r.width / 2 - Number(c.getAttribute('cx'));
+      vcam.py += r.height / 2 - Number(c.getAttribute('cy'));
+    }
+  } else {
+    const r = svg.getBoundingClientRect();
+    view.x = r.width / 2 - (n.x + NW / 2) * view.k;
+    view.y = r.height / 2 - (n.y + NH / 2) * view.k;
+  }
+  loadZkill(n.id); render();
+  flashSystem(n.id);
+}
+function flashSystem(id){
+  const target = cfg.view === 'vol'
+    ? [...document.querySelectorAll('#vol .vnode')].find(x => String(x.dataset.node) === String(id))
+    : [...document.querySelectorAll('#nodes .node')].find(x => x.getAttribute('aria-label') === 'Système ' + (map.nodes[id] || {}).name);
+  if (!target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  target.animate([{ opacity:1 }, { opacity:.35 }, { opacity:1 }, { opacity:.35 }, { opacity:1 }], { duration:900, easing:'ease-in-out' });
 }
 function renderLog(){
   const box = $('#log');
