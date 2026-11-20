@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Le Petit Poucet Galactique</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Carte de navigation wormhole partagée : carte à gauche, panneaux à droite. Thème sombre unique. */
+:root{
+  --bg:#070a12; --panel:#0e1424; --panel-2:#141c30; --line:#24314c; --text:#e2e8f3; --dim:#8b98b0;
+  --accent:#f2a74b; --ok:#5fd68a; --warn:#f2c94b; --bad:#ef5a5a; --eol:#c07cff;
+  --hs:#4fc36b; --ls:#e0a43a; --ns:#e05a4f; --c1:#52b6e8; --c2:#4f8de8; --c3:#7c74e8; --c4:#b06ce0;
+  --c5:#e06cb8; --c6:#e85a6c; --thera:#e8d25a; --c13:#9aa6b8; --drift:#5ad6c6; --poch:#d65a9a;
+  --display:"Saira Condensed","Arial Narrow",sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:var(--body);font-size:14px;display:grid;grid-template-rows:auto 1fr;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--panel-2);border:1px solid var(--line);padding:6px 11px;cursor:pointer;border-radius:3px}
+button:hover{border-color:var(--dim)}
+button.primary{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:600}
+button.danger{color:var(--bad);border-color:#5a2a2a}
+button.small{padding:3px 8px;font-size:12px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input,select,textarea{background:var(--bg);border:1px solid var(--line);padding:6px 8px;border-radius:3px;min-width:0}
+a{color:var(--accent)}
+.mono{font-family:var(--mono)}
+.dim{color:var(--dim)}
+.num{font-variant-numeric:tabular-nums}
+header{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+header h1{font-family:var(--display);font-size:1.5rem;margin:0 8px 0 0;letter-spacing:.05em;text-transform:uppercase}
+header h1 b{color:var(--accent)}
+header .grow{flex:1}
+header form{display:flex;gap:6px}
+header form input{width:150px}
+.sync{font-family:var(--mono);font-size:11.5px;padding:4px 8px;border:1px solid var(--line);border-radius:3px;color:var(--dim);white-space:nowrap}
+.sync.on{color:var(--ok);border-color:#24533a}
+.sync.err{color:var(--bad);border-color:#5a2a2a}
+.layout{display:grid;grid-template-columns:1fr 370px;min-height:0}
+#mapwrap{position:relative;min-height:0;overflow:hidden;background:radial-gradient(circle at 1px 1px,#1a2338 1px,transparent 1.5px) 0 0/28px 28px,var(--bg)}
+svg#map{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+svg#map.panning{cursor:grabbing}
+svg#vol{width:100%;height:100%;display:block;touch-action:none;cursor:grab;background:radial-gradient(ellipse at 50% 60%,#121b33 0%,var(--bg) 70%)}
+svg#vol.panning{cursor:grabbing}
+#vol .ring{fill:none;stroke:#1d2942;stroke-width:1}
+#vol .stem{stroke:#2a3858;stroke-width:1;stroke-dasharray:2 3}
+#vol .shadow{fill:#000;opacity:.45}
+#vol .vnode{cursor:pointer}
+#vol .vnode text{pointer-events:none}
+#vol .vname{font-family:var(--display);font-weight:700;fill:var(--text);paint-order:stroke;stroke:var(--bg);stroke-width:3px}
+#vol .vcls{font-family:var(--mono);font-weight:500;paint-order:stroke;stroke:var(--bg);stroke-width:3px}
+#vol .vsel{fill:none;stroke:var(--accent);stroke-width:2}
+.hint{position:absolute;right:12px;top:12px;font-size:11.5px;color:var(--dim);background:rgba(14,20,36,.85);border:1px solid var(--line);padding:5px 9px;border-radius:3px}
+.node rect.box{fill:var(--panel);stroke:var(--line);stroke-width:1.2}
+.node.sel rect.box{stroke:var(--accent);stroke-width:2}
+.node.here rect.box{stroke:#fff;stroke-width:2}
+.node text{pointer-events:none}
+.node .nm{font-family:var(--display);font-size:19px;font-weight:700;fill:var(--text)}
+.node .sub{font-family:var(--mono);font-size:10.5px;fill:var(--dim)}
+.node .cls{font-family:var(--mono);font-size:11px;font-weight:500}
+.node .eff{font-family:var(--mono);font-size:10px;fill:var(--warn)}
+.node .act{font-family:var(--mono);font-size:10px;fill:var(--bad)}
+.node{cursor:pointer}
+.halo{fill:none;stroke:#fff;stroke-width:2;opacity:.6}
+@media (prefers-reduced-motion:no-preference){.halo{animation:pulse 2s ease-out infinite}}
+@keyframes pulse{0%{opacity:.7;stroke-width:2}100%{opacity:0;stroke-width:14}}
+.who{font-family:var(--mono);font-size:11px;fill:#fff}
+.who.other{fill:var(--drift)}
+.link{stroke-width:3;fill:none}
+.link-hit{stroke:transparent;stroke-width:16;fill:none;cursor:pointer}
+.link.gate{stroke:#3c4a66;stroke-width:2;stroke-dasharray:2 5}
+.link.fresh{stroke:#8fb0d8}
+.link.reduced{stroke:var(--warn);stroke-dasharray:10 5}
+.link.critical{stroke:var(--bad);stroke-dasharray:4 4}
+.link.eol{stroke:var(--eol)}
+.link.sel{filter:drop-shadow(0 0 4px var(--accent))}
+.lt{font-family:var(--mono);font-size:10px;font-weight:600;paint-order:stroke;stroke:var(--bg);stroke-width:3px}
+.legend{position:absolute;left:12px;bottom:12px;background:rgba(14,20,36,.92);border:1px solid var(--line);padding:8px 10px;font-size:11.5px;display:grid;gap:4px;border-radius:3px}
+.legend span{display:flex;align-items:center;gap:8px}
+.legend i{display:inline-block;width:22px;height:0;border-top:3px solid}
+.zoom{position:absolute;right:12px;bottom:12px;display:flex;gap:4px}
+aside{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;min-height:0}
+.card{padding:14px;border-bottom:1px solid var(--line);display:grid;gap:10px}
+.card h2{font-family:var(--display);font-size:1.15rem;letter-spacing:.06em;text-transform:uppercase;margin:0;color:var(--dim);font-weight:500}
+.card h3{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:6px 0 0;color:var(--dim);font-weight:500;border-top:1px solid var(--line);padding-top:10px}
+.pilot{display:grid;grid-template-columns:56px 1fr;gap:12px;align-items:center}
+.pilot img,.pilot .ph{width:56px;height:56px;border:1px solid var(--line);background:var(--bg);display:block}
+.pilot .nm{font-family:var(--display);font-size:1.35rem;font-weight:700;line-height:1.1}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--dim)}
+.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:4px 8px;font-size:13px;margin:0}
+.kv dt{color:var(--dim);font-family:var(--mono);font-size:11px;text-transform:uppercase;padding-top:2px}
+.kv dd{margin:0}
+.big{font-family:var(--display);font-size:2rem;font-weight:700;line-height:1}
+.badge{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:2px;color:#0b0f18;font-weight:600}
+.chip{font-family:var(--mono);font-size:11.5px;padding:2px 7px;border:1px solid var(--line);border-radius:2px;background:var(--panel-2)}
+textarea{width:100%;resize:vertical;min-height:56px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:4px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--mono);font-size:10.5px;color:var(--dim);font-weight:500;text-transform:uppercase}
+td.id{font-family:var(--mono);white-space:nowrap}
+td.r,th.r{text-align:right}
+tr.wh td{color:var(--accent)}
+label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.note{font-size:12px;color:var(--dim);margin:0}
+.box{background:var(--bg);border:1px solid var(--line);padding:10px;border-radius:3px;display:grid;gap:6px}
+.res{font-family:var(--mono);font-size:12.5px;display:block;line-height:1.65}
+.res b{color:var(--text)}
+.warnline{color:var(--warn);font-size:12.5px}
+.badline{color:var(--bad);font-size:12.5px}
+#log{font-family:var(--mono);font-size:11.5px;display:grid;gap:3px;max-height:170px;overflow:auto}
+.plist{display:grid;gap:4px;font-size:13px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--line);padding:10px 16px;border-radius:3px;display:none;z-index:40;max-width:90vw}
+#toast.err{border-color:var(--bad)}
+.modal{position:fixed;inset:0;background:rgba(3,5,10,.8);display:none;align-items:center;justify-content:center;z-index:30;padding:16px}
+.modal.open{display:flex}
+.modal .mbox{background:var(--panel);border:1px solid var(--line);max-width:680px;width:100%;padding:22px;display:grid;gap:12px;max-height:92vh;overflow:auto;border-radius:4px}
+.modal h2{font-family:var(--display);font-size:1.8rem;margin:0}
+.modal h3{font-family:var(--display);font-size:1.25rem;margin:8px 0 0;color:var(--accent);letter-spacing:.03em}
+.modal ol{margin:0;padding-left:20px;display:grid;gap:6px}
+.modal code,.modal pre{font-family:var(--mono);background:var(--bg);padding:1px 5px;border:1px solid var(--line);word-break:break-all}
+.modal pre{padding:8px;white-space:pre-wrap;margin:0;font-size:12px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tabs button[aria-selected="true"]{background:var(--text);color:var(--bg);border-color:var(--text)}
+.empty{color:var(--dim);font-size:13px}
+@media (max-width:860px){.layout{grid-template-columns:1fr;grid-template-rows:60vh auto}aside{border-left:0;border-top:1px solid var(--line)}body{overflow:auto}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Le Petit Poucet <b>Galactique</b></h1>
+  <form id="addForm" autocomplete="off">
+    <input id="addName" placeholder="Ajouter un système…" aria-label="Nom du système à ajouter">
+    <button type="submit">Ajouter</button>
+  </form>
+  <span class="grow"></span>
+  <span class="sync" id="syncState" title="État du partage">Carte locale</span>
+  <button id="btnDemo" type="button">Mode démo</button>
+  <button id="btnView" type="button" aria-pressed="false">Vue volume</button>
+  <button id="btnCenter" type="button">Recentrer</button>
+  <button id="btnExport" type="button">Exporter</button>
+  <button id="btnImport" type="button">Importer</button>
+  <input id="fileImport" type="file" accept=".json,application/json" hidden>
+  <button id="btnClear" type="button" class="danger">Vider la carte</button>
+  <button id="btnHelp" type="button">Aide</button>
+  <button id="btnSetup" type="button">Réglages</button>
+  <button id="btnLogin" type="button" class="primary">Connexion EVE</button>
+</header>
+
+<div class="layout">
+  <div id="mapwrap">
+    <svg id="map" aria-label="Carte des systèmes">
+      <g id="vp"><g id="links"></g><g id="nodes"></g><g id="labels"></g></g>
+    </svg>
+    <svg id="vol" aria-label="Carte des systèmes en volume" hidden>
+      <defs id="volDefs"></defs>
+      <g id="volScene"></g>
+    </svg>
+    <div class="hint" id="volHint" hidden>Glisser : tourner · Maj + glisser : déplacer · Molette : zoom</div>
+    <div class="legend" aria-label="Légende">
+      <span><i style="border-color:#8fb0d8"></i>Trou de ver stable</span>
+      <span><i style="border-color:var(--warn);border-top-style:dashed"></i>Masse réduite</span>
+      <span><i style="border-color:var(--bad);border-top-style:dotted"></i>Masse critique</span>
+      <span><i style="border-color:var(--eol)"></i>Fin de vie (EOL)</span>
+      <span><i style="border-color:#3c4a66;border-top-style:dotted;border-top-width:2px"></i>Porte stellaire</span>
+    </div>
+    <div class="zoom"><button type="button" id="zin" aria-label="Zoomer">+</button><button type="button" id="zout" aria-label="Dézoomer">−</button></div>
+  </div>
+
+  <aside>
+    <section class="card">
+      <h2>Pilote</h2>
+      <div class="pilot">
+        <div class="ph" id="portrait"></div>
+        <div>
+          <div class="nm" id="pName">Non connecté</div>
+          <div class="dim" id="pStatus"><span class="dot"></span>Hors ligne</div>
+        </div>
+      </div>
+      <dl class="kv">
+        <dt>Système</dt><dd id="pSys">–</dd>
+        <dt>Vaisseau</dt><dd id="pShip">–</dd>
+        <dt>Suivi</dt><dd id="pTrack">Arrêté</dd>
+      </dl>
+    </section>
+
+    <section class="card" id="pilotsCard" hidden>
+      <h2>Pilotes sur la carte</h2>
+      <div class="plist" id="pilotsList"></div>
+    </section>
+
+    <section class="card">
+      <h2>Sélection</h2>
+      <div id="selBody" class="empty">Cliquez sur un système ou une connexion de la carte.</div>
+    </section>
+
+    <section class="card">
+      <h2>Sorties vers le k-space</h2>
+      <div id="exitsBody" class="empty">Aucun système en k-space sur la carte.</div>
+    </section>
+
+    <section class="card">
+      <h2>Journal des sauts</h2>
+      <div id="log"><span class="empty">Aucun saut pour l'instant.</span></div>
+    </section>
+  </aside>
+</div>
+
+<!-- Réglages -->
+<div class="modal" id="setup" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+  <div class="mbox">
+    <h2 id="setupTitle">Réglages</h2>
+    <h3>1. Connexion EVE</h3>
+    <p class="note">Adresse de retour (Callback URL) à déclarer dans votre application sur developers.eveonline.com :</p>
+    <code id="cbUrl"></code>
+    <label class="f">Client ID de l'application EVE<input id="clientId" class="mono" spellcheck="false" placeholder="ex. 3f2a…"></label>
+    <label class="f">Rafraîchissement de la position
+      <select id="pollSel"><option value="5">Toutes les 5 secondes</option><option value="10">Toutes les 10 secondes</option><option value="20">Toutes les 20 secondes</option></select>
+    </label>
+    <h3>2. Carte partagée avec la corpo</h3>
+    <p class="note" id="shareState">Carte locale : elle n'est visible que dans ce navigateur.</p>
+    <label class="f">Adresse de votre base Firebase (Realtime Database)
+      <input id="dbUrl" class="mono" spellcheck="false" placeholder="https://mon-projet-default-rtdb.europe-west1.firebasedatabase.app">
+    </label>
+    <div class="row">
+      <button type="button" id="btnCreateShare">Créer une carte partagée</button>
+      <button type="button" id="btnLeaveShare" class="danger" hidden>Quitter la carte partagée</button>
+    </div>
+    <div id="shareLinkBox" class="box" hidden>
+      <span class="note">Lien d'invitation à envoyer à vos corpmates. Toute personne qui a ce lien peut voir et modifier la carte, gardez-le dans la corpo.</span>
+      <input id="shareLink" class="mono" readonly aria-label="Lien d'invitation">
+      <div class="row"><button type="button" id="btnCopyLink">Copier le lien</button></div>
+    </div>
+    <h3>3. Maison et hubs</h3>
+    <label class="f">Votre système « maison » en k-space (facultatif)<input id="homeName" placeholder="ex. Hek"></label>
+    <div class="row"><button type="button" class="primary" id="saveSetup">Enregistrer</button><button type="button" id="closeSetup">Fermer</button></div>
+    <p class="note">Vos jetons de connexion EVE restent dans ce navigateur et ne sont envoyés qu'aux serveurs de CCP. La base Firebase ne reçoit que la carte et la position des pilotes.</p>
+  </div>
+</div>
+
+<!-- Aide / installation -->
+<div class="modal" id="help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="mbox">
+    <h2 id="helpTitle">Aide et installation</h2>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="h-use" aria-selected="true">Utilisation</button>
+      <button type="button" role="tab" data-tab="h-gh" aria-selected="false">Mettre en ligne</button>
+      <button type="button" role="tab" data-tab="h-fb" aria-selected="false">Base partagée</button>
+      <button type="button" role="tab" data-tab="h-eve" aria-selected="false">Application EVE</button>
+    </div>
+    <div id="h-use" class="tabpane">
+      <ol>
+        <li>Connectez-vous avec <b>Connexion EVE</b> : la carte suit votre personnage et ajoute chaque système où vous sautez.</li>
+        <li>Cliquez sur un <b>système</b> pour voir sa classe, ses statics, son effet, l'activité récente, vos notes et ses signatures.</li>
+        <li>Dans le scanner du jeu, faites Ctrl+A puis Ctrl+C, et collez dans la zone <b>Signatures</b> du système.</li>
+        <li>Cliquez sur une <b>connexion</b> pour indiquer le type de trou (ex. H296), la masse, la fin de vie, et utiliser le calculateur de masse.</li>
+        <li>Notez chaque passage (« Ajouter un passage ») pour suivre la masse restante, partagée avec toute la corpo.</li>
+        <li><b>Sorties vers le k-space</b> : calcule le nombre de sauts vers Jita, Amarr, Dodixie, Rens, Hek et votre maison.</li>
+        <li>Déplacez les systèmes à la souris, molette pour zoomer, cliquez-glissez le fond pour vous déplacer.</li>
+      </ol>
+    </div>
+    <div id="h-gh" class="tabpane" hidden>
+      <p class="note">GitHub Pages héberge la carte gratuitement, à une adresse https. Votre PC n'a pas besoin de rester allumé.</p>
+      <ol>
+        <li>Créez un compte gratuit sur <a href="https://github.com/" target="_blank" rel="noopener">github.com</a>.</li>
+        <li>Cliquez sur <b>+</b> en haut à droite, puis <b>New repository</b>. Nom : <code>carte-wh</code>. Cochez <b>Public</b>, puis <b>Create repository</b>.</li>
+        <li>Cliquez sur <b>uploading an existing file</b>, déposez le fichier <code>carte-wh.html</code> <b>renommé en</b> <code>index.html</code>, puis <b>Commit changes</b>.</li>
+        <li>Allez dans <b>Settings</b>, puis <b>Pages</b>. Sous <i>Branch</i>, choisissez <code>main</code> et <code>/ (root)</code>, puis <b>Save</b>.</li>
+        <li>Après une minute, votre carte est en ligne à l'adresse <code>https://VOTRE-PSEUDO.github.io/carte-wh/</code>.</li>
+        <li>Mettez cette adresse comme <b>Callback URL</b> dans votre application EVE (onglet « Application EVE »).</li>
+      </ol>
+      <p class="note">Le dépôt est public : n'y mettez que ce fichier. Il ne contient aucun mot de passe, et le lien de votre base n'est jamais écrit dedans.</p>
+    </div>
+    <div id="h-fb" class="tabpane" hidden>
+      <p class="note">Firebase (Google) stocke la carte commune gratuitement. Aucun moyen de paiement n'est demandé.</p>
+      <ol>
+        <li>Allez sur <a href="https://console.firebase.google.com/" target="_blank" rel="noopener">console.firebase.google.com</a> et connectez-vous avec un compte Google.</li>
+        <li><b>Créer un projet</b> (ex. <code>carte-wh</code>). Vous pouvez refuser Google Analytics.</li>
+        <li>Dans le menu de gauche : <b>Créer</b> (Build), puis <b>Realtime Database</b>, puis <b>Créer une base de données</b>. Emplacement : <b>Belgique (europe-west1)</b>. Mode : <b>verrouillé</b>.</li>
+        <li>Ouvrez l'onglet <b>Règles</b>, remplacez tout par le texte ci-dessous, puis <b>Publier</b> :</li>
+      </ol>
+<pre id="rulesText">{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$room": {
+        ".read": "$room.length >= 24",
+        ".write": "$room.length >= 24"
+      }
+    }
+  }
+}</pre>
+      <div class="row"><button type="button" class="small" id="btnCopyRules">Copier les règles</button></div>
+      <ol start="5">
+        <li>Revenez sur l'onglet <b>Données</b> et copiez l'adresse affichée en haut (elle se termine par <code>firebasedatabase.app</code>).</li>
+        <li>Dans la carte : <b>Réglages</b>, collez l'adresse, puis <b>Créer une carte partagée</b>. Envoyez le lien d'invitation à vos corpmates.</li>
+      </ol>
+      <p class="note">Ces règles interdisent de lister les cartes : seule une personne qui connaît le code secret de votre carte (dans le lien d'invitation) peut la lire ou la modifier.</p>
+    </div>
+    <div id="h-eve" class="tabpane" hidden>
+      <ol>
+        <li>Sur <a href="https://developers.eveonline.com/" target="_blank" rel="noopener">developers.eveonline.com</a>, ouvrez votre application (ou créez-en une : <b>Authentication &amp; API Access</b>).</li>
+        <li>Autorisations : cochez le groupe <code>esi-location</code> (position, en ligne, vaisseau).</li>
+        <li><b>Callback URL</b> : l'adresse exacte affichée dans Réglages. En ligne, c'est votre adresse GitHub Pages, par exemple <code>https://VOTRE-PSEUDO.github.io/carte-wh/</code>.</li>
+        <li>Copiez le <b>Client ID</b> dans les Réglages. Il est inclus dans le lien d'invitation : vos corpmates n'ont rien à créer.</li>
+      </ol>
+    </div>
+    <div class="row"><button type="button" id="closeHelp">Fermer</button></div>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+/* =========================================================
+   Constantes et utilitaires
+   ========================================================= */
+const ESI = 'https://esi.evetech.net/latest';
+const ESI_ROOT = 'https://esi.evetech.net';
+const SSO = 'https://login.eveonline.com/v2/oauth';
+const SCOPES = 'esi-location.read_location.v1 esi-location.read_online.v1 esi-location.read_ship_type.v1';
+const DATA_URL = 'https://raw.githubusercontent.com/wanderer-industries/wanderer/main/priv/repo/data/';
+const K = { cfg:'whmap.cfg', tok:'whmap.tok', map:'whmap.map', pkce:'whmap.pkce', me:'whmap.me', data:'whmap.data2' };
+const NW = 156, NH = 62;
+const HUBS = [
+  { id:30000142, name:'Jita' }, { id:30002187, name:'Amarr' }, { id:30002659, name:'Dodixie' },
+  { id:30002510, name:'Rens' }, { id:30002053, name:'Hek' }
+];
+const EFFECTS = {
+  'Pulsar':'Boucliers renforcés, signature plus grande, armure plus faible',
+  'Magnetar':'Dégâts augmentés, précision des tirs (tracking) réduite',
+  'Black Hole':'Vaisseaux plus rapides mais moins maniables, portée des missiles augmentée',
+  'Wolf-Rayet Star':'Armure renforcée, dégâts des petites armes augmentés, boucliers plus faibles',
+  'Cataclysmic Variable':'Réparations à distance plus fortes, réparations locales plus faibles',
+  'Red Giant':'Surchauffe plus efficace, dégâts des bombes augmentés'
+};
+const DEST_LABEL = { hs:'HS', ls:'LS', ns:'NS', c1:'C1', c2:'C2', c3:'C3', c4:'C4', c5:'C5', c6:'C6', c13:'C13', thera:'Thera', pochven:'Pochven', drifter:'Drifter' };
+
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtInt = n => Math.round(n).toLocaleString('fr-FR');
+const fmtMkg = kg => (kg / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: kg < 1e8 ? 1 : 0 }) + ' M kg';
+const fmtDur = min => { min = Math.max(0, Math.round(min)); const h = Math.floor(min / 60), m = min % 60; return h ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`; };
+const parseKg = s => { const v = Number(String(s || '').replace(/[\s  ,.]/g, '')); return isFinite(v) ? v : 0; };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const callbackUrl = location.origin + location.pathname.replace(/index\.html$/, '');
+
+let cfg = Object.assign({ clientId:'', poll:5, db:'', room:'', home:null, ships:[] }, store.get(K.cfg, {}));
+let tok = store.get(K.tok, null);
+let me = store.get(K.me, { current:null });
+let map = emptyMap();
+let view = { x:0, y:0, k:1 };
+let sel = null;
+let pollTimer = null, demoTimer = null, demoMode = false, savedBeforeDemo = null;
+let lastShipCheck = 0, lastOnlineCheck = 0;
+const pilot = { online:false, ship:'', shipType:'' };
+const cache = new Map();
+const routeCache = new Map();
+let whData = { types:{}, systems:{}, loaded:false, error:false };
+let activity = { kills:{}, jumps:{}, t:0 };
+let zkill = {};
+
+function emptyMap(){ return { nodes:{}, links:{}, pilots:{}, log:{} }; }
+function normalize(m){
+  m = m || {};
+  const out = { nodes:m.nodes || {}, links:m.links || {}, pilots:m.pilots || {}, log:m.log || {} };
+  if (Array.isArray(m.links)) { out.links = {}; m.links.forEach(l => { if (l) out.links[l.id] = l; }); }
+  if (Array.isArray(m.log)) { out.log = {}; m.log.forEach((e, i) => { if (e) out.log['k' + i] = e; }); }
+  for (const id in out.nodes){ const n = out.nodes[id]; n.sigs = arr(n.sigs); }
+  for (const id in out.links){ const l = out.links[id]; l.passes = arr(l.passes); }
+  return out;
+}
+function arr(v){ return Array.isArray(v) ? v.filter(Boolean) : (v && typeof v === 'object' ? Object.values(v).filter(Boolean) : []); }
+function toast(msg, err){
+  const t = $('#toast'); t.textContent = msg; t.className = err ? 'err' : ''; t.style.display = 'block';
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', err ? 6500 : 3000);
+}
+function saveCfg(){ store.set(K.cfg, cfg); }
+function saveMe(){ store.set(K.me, me); }
+
+/* =========================================================
+   Stockage : local ou partagé (Firebase Realtime Database, REST + flux)
+   ========================================================= */
+const shared = () => !!(cfg.db && cfg.room) && !demoMode;
+const roomBase = () => `${cfg.db.replace(/\/+$/, '')}/rooms/${cfg.room}`;
+const cacheKey = () => shared() ? 'whmap.cache.' + cfg.room : K.map;
+let es = null, persistT = null, renderT = null;
+
+function persistLocal(){ clearTimeout(persistT); persistT = setTimeout(() => { if (!demoMode) store.set(cacheKey(), map); }, 300); }
+function scheduleRender(){ clearTimeout(renderT); renderT = setTimeout(renderAll, 60); }
+function setAt(obj, parts, val){
+  if (!parts.length) return val;
+  let o = obj;
+  for (let i = 0; i < parts.length - 1; i++){ if (typeof o[parts[i]] !== 'object' || o[parts[i]] === null) o[parts[i]] = {}; o = o[parts[i]]; }
+  const last = parts[parts.length - 1];
+  if (val === null || val === undefined) delete o[last]; else o[last] = val;
+  return obj;
+}
+async function remote(method, path, body){
+  if (!shared()) return;
+  try{
+    const r = await fetch(`${roomBase()}/${path}.json`, { method, headers:{ 'Content-Type':'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    if (!r.ok) throw new Error('Firebase ' + r.status);
+  }catch(e){ setSync('err', 'Partage : erreur d\'écriture'); }
+}
+/* Écrit une valeur (null = supprimer) localement et dans la base partagée */
+function put(path, val){
+  setAt(map, path.split('/'), val === undefined ? null : JSON.parse(JSON.stringify(val)));
+  persistLocal(); scheduleRender();
+  if (val === null || val === undefined) remote('DELETE', path); else remote('PUT', path, val);
+}
+function patch(path, obj){
+  const parts = path.split('/');
+  let o = map; for (const p of parts){ if (typeof o[p] !== 'object' || o[p] === null) o[p] = {}; o = o[p]; }
+  Object.assign(o, JSON.parse(JSON.stringify(obj)));
+  persistLocal(); scheduleRender();
+  remote('PATCH', path, obj);
+}
+function setSync(state, text){ const s = $('#syncState'); s.className = 'sync' + (state ? ' ' + state : ''); s.textContent = text; }
+
+function connectShared(){
+  if (es){ es.close(); es = null; }
+  if (!shared()){ setSync('', demoMode ? 'Démo' : 'Carte locale'); return; }
+  map = normalize(store.get(cacheKey(), null));
+  setSync('', 'Connexion au partage…');
+  try{
+    es = new EventSource(`${roomBase()}.json`);
+  }catch(e){ setSync('err', 'Partage impossible'); return; }
+  es.addEventListener('put', ev => {
+    const { path, data } = JSON.parse(ev.data);
+    if (path === '/') map = normalize(data);
+    else { setAt(map, path.slice(1).split('/'), data); map = normalize(map); }
+    setSync('on', 'Partagée · en direct');
+    persistLocal(); scheduleRender();
+  });
+  es.addEventListener('patch', ev => {
+    const { path, data } = JSON.parse(ev.data);
+    const base = path === '/' ? [] : path.slice(1).split('/');
+    for (const k in data) setAt(map, base.concat(k.split('/')), data[k]);
+    map = normalize(map);
+    persistLocal(); scheduleRender();
+  });
+  es.addEventListener('cancel', () => { setSync('err', 'Accès refusé par la base'); toast('La base Firebase refuse l\'accès : vérifiez les règles (onglet Aide > Base partagée).', true); });
+  es.onerror = () => setSync('err', 'Partage : reconnexion…');
+  es.onopen = () => setSync('on', 'Partagée · en direct');
+}
+
+/* =========================================================
+   Données de référence : types de trous et statics (Wanderer, licence MIT)
+   ========================================================= */
+async function loadWhData(){
+  const saved = store.get(K.data, null);
+  if (saved && Date.now() - saved.t < 7 * 864e5){ whData = { types:saved.types, systems:saved.systems, loaded:true }; scheduleRender(); return; }
+  try{
+    const [types, systems] = await Promise.all([
+      fetch(DATA_URL + 'wormholes.json').then(r => { if (!r.ok) throw 0; return r.json(); }),
+      fetch(DATA_URL + 'wormholeSystems.json').then(r => { if (!r.ok) throw 0; return r.json(); })
+    ]);
+    const t = {}, s = {};
+    for (const w of types){ if (!w || !w.name) continue;
+      t[w.name] = { dest:(w.dest || []).map(String), total:Number(w.total_mass) || 0, jump:Number(w.max_mass_per_jump) || 0,
+                    life:parseFloat(w.lifetime) || 0, regen:Number(w.mass_regen) || 0, isStatic:!!w.static }; }
+    for (const y of systems){ if (!y || !y.solarSystemID) continue;
+      s[y.solarSystemID] = { st:y.statics || [], eff:y.effectName || null }; }
+    whData = { types:t, systems:s, loaded:true };
+    store.set(K.data, { t:Date.now(), types:t, systems:s });
+    scheduleRender();
+  }catch(e){
+    if (saved){ whData = { types:saved.types, systems:saved.systems, loaded:true }; }
+    else { whData.error = true; }
+    scheduleRender();
+  }
+}
+const typeInfo = code => code && whData.types[String(code).toUpperCase()];
+const destTxt = t => t && t.dest && t.dest.length ? t.dest.map(d => DEST_LABEL[d] || d.toUpperCase()).join('/') : '?';
+
+/* =========================================================
+   Classification des systèmes
+   ========================================================= */
+const CLASS = {
+  HS:{label:'HS',color:'var(--hs)'}, LS:{label:'LS',color:'var(--ls)'}, NS:{label:'NS',color:'var(--ns)'},
+  C1:{label:'C1',color:'var(--c1)'}, C2:{label:'C2',color:'var(--c2)'}, C3:{label:'C3',color:'var(--c3)'},
+  C4:{label:'C4',color:'var(--c4)'}, C5:{label:'C5',color:'var(--c5)'}, C6:{label:'C6',color:'var(--c6)'},
+  THERA:{label:'Thera',color:'var(--thera)'}, C13:{label:'C13',color:'var(--c13)'}, DRIFT:{label:'Drifter',color:'var(--drift)'},
+  POCH:{label:'Pochven',color:'var(--poch)'}, '?':{label:'?',color:'var(--dim)'}
+};
+function classify(region, sec){
+  const m = /^([A-K])-R\d/.exec(region || '');
+  if (m) return ({A:'C1',B:'C2',C:'C3',D:'C4',E:'C5',F:'C6',G:'THERA',H:'C13',K:'DRIFT'})[m[1]] || '?';
+  if (region === 'Pochven') return 'POCH';
+  const s = Math.round((sec ?? 0) * 10) / 10;
+  if (s >= 0.5) return 'HS';
+  if (s > 0) return 'LS';
+  return 'NS';
+}
+const isJ = c => ['C1','C2','C3','C4','C5','C6','THERA','C13','DRIFT'].includes(c);
+const isK = c => ['HS','LS','NS','POCH'].includes(c);
+const isRealId = id => /^\d+$/.test(String(id));
+
+/* =========================================================
+   ESI
+   ========================================================= */
+async function esi(path, auth){
+  const key = auth ? null : path;
+  if (key && cache.has(key)) return cache.get(key);
+  const headers = { 'Accept':'application/json' };
+  if (auth){ await ensureToken(); headers.Authorization = 'Bearer ' + tok.access_token; }
+  const r = await fetch(ESI + path, { headers, cache: auth ? 'no-store' : 'default' });
+  if (!r.ok) throw new Error('ESI ' + r.status + ' sur ' + path);
+  const j = await r.json();
+  if (key) cache.set(key, j);
+  return j;
+}
+async function systemInfo(id){
+  const s = await esi(`/universe/systems/${id}/`);
+  const c = await esi(`/universe/constellations/${s.constellation_id}/`);
+  const g = await esi(`/universe/regions/${c.region_id}/`);
+  return { id, name:s.name, sec:s.security_status, region:g.name, cls:classify(g.name, s.security_status), stargates:s.stargates || [] };
+}
+async function gateConnected(a, b){
+  const na = map.nodes[a], nb = map.nodes[b];
+  if (!na || !nb || isJ(na.cls) || isJ(nb.cls) || !na.stargates || !na.stargates.length) return false;
+  for (const sg of na.stargates){
+    try{ const g = await esi(`/universe/stargates/${sg}/`); if (g.destination && g.destination.system_id == b) return true; }catch(e){}
+  }
+  return false;
+}
+async function routeJumps(origin, dest){
+  const key = origin + '>' + dest;
+  if (routeCache.has(key)) return routeCache.get(key);
+  let ids = null;
+  try{
+    const r = await fetch(`${ESI_ROOT}/route/${origin}/${dest}`, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Compatibility-Date':'2025-09-30' }, body:JSON.stringify({ preference:'Shorter' }) });
+    if (r.ok){ const j = await r.json(); ids = Array.isArray(j) ? j : (j.route || j.systems || null); }
+  }catch(e){}
+  if (!ids){
+    try{ const r = await fetch(`${ESI}/route/${origin}/${dest}/?flag=shortest`); if (r.ok) ids = await r.json(); }catch(e){}
+  }
+  const n = Array.isArray(ids) ? Math.max(0, ids.length - 1) : null;
+  routeCache.set(key, n);
+  return n;
+}
+async function loadActivity(){
+  if (Date.now() - activity.t < 10 * 60000) return;
+  try{
+    const [k, j] = await Promise.all([ esi('/universe/system_kills/'), esi('/universe/system_jumps/') ]);
+    cache.delete('/universe/system_kills/'); cache.delete('/universe/system_jumps/');
+    const kills = {}, jumps = {};
+    k.forEach(x => kills[x.system_id] = x); j.forEach(x => jumps[x.system_id] = x.ship_jumps);
+    activity = { kills, jumps, t:Date.now() };
+    scheduleRender();
+  }catch(e){}
+}
+async function loadZkill(id){
+  if (!isRealId(id) || (zkill[id] && Date.now() - zkill[id].t < 10 * 60000)) return;
+  zkill[id] = { t:Date.now(), n:null };
+  try{
+    const r = await fetch(`https://zkillboard.com/api/kills/solarSystemID/${id}/pastSeconds/86400/`);
+    if (r.ok){ const j = await r.json(); zkill[id].n = Array.isArray(j) ? j.length : null; }
+  }catch(e){ zkill[id].n = null; }
+  if (sel && sel.kind === 'node' && sel.id == id) renderSel();
+}
+
+/* =========================================================
+   Connexion EVE (SSO avec PKCE, sans secret)
+   ========================================================= */
+const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+function jwt(t){ try{ return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }catch(e){ return {}; } }
+async function login(){
+  if (!cfg.clientId){ openSetup(); toast('Indiquez d\'abord le Client ID de votre application EVE.', true); return; }
+  if (location.protocol === 'file:'){ toast('Ouvrez la carte depuis son adresse en ligne (ou http://localhost) pour vous connecter.', true); return; }
+  if (!window.crypto || !crypto.subtle){ toast('Ce navigateur bloque la connexion : utilisez une adresse https ou http://localhost.', true); return; }
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
+  try{ sessionStorage.setItem(K.pkce, JSON.stringify({ verifier, state })); }catch(e){}
+  const p = new URLSearchParams({ response_type:'code', redirect_uri:callbackUrl, client_id:cfg.clientId, scope:SCOPES, code_challenge:challenge, code_challenge_method:'S256', state });
+  location.href = `${SSO}/authorize/?${p}`;
+}
+async function tokenRequest(params){
+  const r = await fetch(`${SSO}/token`, { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body:new URLSearchParams(params) });
+  if (!r.ok) throw new Error('Connexion refusée par CCP (' + r.status + ')');
+  const j = await r.json();
+  const claims = jwt(j.access_token);
+  tok = { access_token:j.access_token, refresh_token:j.refresh_token, exp:(claims.exp || 0) * 1000,
+          charId:Number(String(claims.sub || '').split(':').pop()), charName:claims.name || '' };
+  store.set(K.tok, tok);
+}
+async function handleCallback(){
+  const q = new URLSearchParams(location.search);
+  if (!q.has('code')) return;
+  let saved = null; try{ saved = JSON.parse(sessionStorage.getItem(K.pkce) || 'null'); }catch(e){}
+  history.replaceState(null, '', callbackUrl);
+  if (!saved || saved.state !== q.get('state')){ toast('Connexion interrompue, réessayez.', true); return; }
+  try{ await tokenRequest({ grant_type:'authorization_code', code:q.get('code'), client_id:cfg.clientId, code_verifier:saved.verifier }); toast('Connecté : ' + tok.charName); }
+  catch(e){ toast(e.message, true); }
+}
+async function ensureToken(){
+  if (!tok) throw new Error('Non connecté');
+  if (Date.now() < tok.exp - 60000) return;
+  await tokenRequest({ grant_type:'refresh_token', refresh_token:tok.refresh_token, client_id:cfg.clientId });
+}
+function logout(){
+  if (tok && shared()) put(`pilots/${tok.charId}`, null);
+  tok = null; store.del(K.tok); stopTracking(); renderPilot();
+}
+
+/* =========================================================
+   Suivi du personnage
+   ========================================================= */
+function startTracking(){
+  stopTracking();
+  tick();
+  pollTimer = setInterval(tick, (cfg.poll || 5) * 1000);
+  $('#pTrack').textContent = `Actif, toutes les ${cfg.poll || 5} s`;
+}
+function stopTracking(){ clearInterval(pollTimer); pollTimer = null; if (!demoMode) $('#pTrack').textContent = 'Arrêté'; }
+async function tick(){
+  if (!tok || demoMode) return;
+  try{
+    const now = Date.now();
+    if (now - lastOnlineCheck > 60000){ lastOnlineCheck = now; const o = await esi(`/characters/${tok.charId}/online/`, true); pilot.online = !!o.online; }
+    const loc = await esi(`/characters/${tok.charId}/location/`, true);
+    if (now - lastShipCheck > 15000){
+      lastShipCheck = now;
+      const sh = await esi(`/characters/${tok.charId}/ship/`, true);
+      let typeName = ''; try{ typeName = (await esi(`/universe/types/${sh.ship_type_id}/`)).name; }catch(e){}
+      pilot.ship = sh.ship_name ? `${sh.ship_name} (${typeName})` : typeName; pilot.shipType = typeName;
+    }
+    await arriveAt(loc.solar_system_id);
+    publishPilot();
+    renderPilot();
+  }catch(e){
+    if (/Connexion refusée/.test(e.message)){ logout(); toast('Session expirée, reconnectez-vous.', true); }
+    else toast(e.message, true);
+  }
+}
+let lastPilotPub = 0;
+function publishPilot(force){
+  if (!tok || !shared()) return;
+  const now = Date.now();
+  const p = map.pilots[tok.charId];
+  const changed = !p || p.sys != me.current || p.ship !== pilot.shipType || p.online !== pilot.online;
+  if (!force && !changed && now - lastPilotPub < 60000) return;
+  lastPilotPub = now;
+  put(`pilots/${tok.charId}`, { name:tok.charName, sys:me.current, ship:pilot.shipType || '', online:pilot.online, t:now });
+}
+
+async function ensureNode(id, nearId, info){
+  if (map.nodes[id]) return map.nodes[id];
+  const d = info || await systemInfo(id);
+  const pos = freeSpot(nearId);
+  const n = { id, name:d.name, sec:d.sec, region:d.region, cls:d.cls, stargates:d.stargates || [], x:pos.x, y:pos.y, notes:'', sigs:[] };
+  put(`nodes/${id}`, n);
+  return map.nodes[id];
+}
+function freeSpot(nearId){
+  const base = map.nodes[nearId];
+  const taken = (x, y) => Object.values(map.nodes).some(n => Math.abs(n.x - x) < NW + 20 && Math.abs(n.y - y) < NH + 24);
+  if (!base){
+    const r = $('#map').getBoundingClientRect();
+    let x = Math.round((r.width / 2 - view.x) / view.k - NW / 2), y = Math.round((r.height / 2 - view.y) / view.k - NH / 2);
+    while (taken(x, y)) y += NH + 30;
+    return { x, y };
+  }
+  const offs = [[320,0],[320,110],[320,-110],[0,125],[0,-125],[320,220],[320,-220],[-320,0],[-320,110],[-320,-110],[640,0]];
+  for (const [dx, dy] of offs){ if (!taken(base.x + dx, base.y + dy)) return { x:base.x + dx, y:base.y + dy }; }
+  return { x:base.x + 320, y:base.y + 330 };
+}
+const linksArr = () => Object.values(map.links).filter(Boolean);
+const linkBetween = (a, b) => linksArr().find(l => (l.a == a && l.b == b) || (l.a == b && l.b == a));
+function addLink(a, b, gate){
+  const id = 'l' + uid();
+  put(`links/${id}`, { id, a, b, type:gate ? 'gate' : 'wh', mass:'fresh', eol:false, size:'?', wh:'', created:Date.now(), passes:[] });
+  return id;
+}
+async function arriveAt(id, info){
+  if (id == null || me.current == id) return;
+  const prev = me.current;
+  await ensureNode(id, map.nodes[prev] ? prev : null, info);
+  if (prev != null && map.nodes[prev] && !linkBetween(prev, id)){
+    const gate = info ? !!info.gate : await gateConnected(prev, id);
+    addLink(prev, id, gate);
+  }
+  me.current = id; saveMe();
+  const from = prev != null && map.nodes[prev] ? map.nodes[prev].name : '–';
+  const who = tok ? tok.charName : (demoMode ? 'Démo' : '');
+  put(`log/${Date.now().toString(36)}${Math.random().toString(36).slice(2,5)}`, { t:Date.now(), who, from, to:map.nodes[id].name });
+  trimLog();
+}
+function trimLog(){
+  const keys = Object.keys(map.log).sort((a, b) => (map.log[a].t || 0) - (map.log[b].t || 0));
+  if (keys.length > 80) keys.slice(0, keys.length - 80).forEach(k => put(`log/${k}`, null));
+}
+
+/* =========================================================
+   Démo (sans connexion ni partage)
+   ========================================================= */
+const DEMO = [
+  { id:'d1', name:'Hek', sec:0.5, region:'Metropolis', cls:'HS' },
+  { id:'d2', name:'J114026', sec:-1, region:'B-R00008', cls:'C2' },
+  { id:'d3', name:'J163512', sec:-1, region:'E-R00024', cls:'C5' },
+  { id:'d2', name:'J114026', sec:-1, region:'B-R00008', cls:'C2' },
+  { id:'d4', name:'Ennur', sec:0.3, region:'Heimatar', cls:'LS' },
+  { id:'d5', name:'Rens', sec:0.9, region:'Heimatar', cls:'HS', gate:true },
+  { id:'d4', name:'Ennur', sec:0.3, region:'Heimatar', cls:'LS', gate:true },
+  { id:'d2', name:'J114026', sec:-1, region:'B-R00008', cls:'C2' },
+  { id:'d6', name:'J201744', sec:-1, region:'C-R00011', cls:'C3' }
+];
+function startDemo(){
+  if (demoMode){ stopDemo(); return; }
+  stopTracking();
+  savedBeforeDemo = { map, current:me.current };
+  demoMode = true; if (es){ es.close(); es = null; }
+  map = emptyMap(); me.current = null; sel = null;
+  setSync('', 'Démo');
+  pilot.online = true; pilot.ship = 'Astero (démo)';
+  map.pilots.demo2 = { name:'Corpmate (démo)', sys:'d1', ship:'Tengu', online:true, t:Date.now() };
+  let i = 0;
+  const step = () => {
+    const d = DEMO[i], idx = i;
+    arriveAt(d.id, d).then(() => {
+      const ls = linksArr();
+      if (idx === 2 && ls[0]){ ls[0].mass = 'reduced'; ls[0].wh = 'D382'; }
+      if (idx === 3 && ls[1]){ ls[1].eol = true; ls[1].eolAt = Date.now() - 50 * 60000; ls[1].wh = 'H296'; ls[1].size = 'XL'; }
+      if (idx === 4 && map.nodes.d2){ map.nodes.d2.sigs = [{ id:'ABC-123', group:'Trou de ver', type:'Trou de ver instable', strength:'100,0 %' }, { id:'XYZ-789', group:'Site de gaz', type:'', strength:'12,4 %' }]; map.nodes.d2.notes = 'Static D382 vers C2. Pas de structure.'; }
+      if (idx === 5) map.pilots.demo2.sys = 'd3';
+      scheduleRender(); renderPilot();
+    });
+    i++;
+    if (i >= DEMO.length){ clearInterval(demoTimer); demoTimer = null; $('#pTrack').textContent = 'Démo terminée'; }
+  };
+  step();
+  demoTimer = setInterval(step, 2000);
+  $('#btnDemo').textContent = 'Quitter la démo';
+  $('#pTrack').textContent = 'Démo en cours';
+  $('#pName').textContent = 'Pilote de démo';
+}
+function stopDemo(){
+  clearInterval(demoTimer); demoTimer = null; demoMode = false;
+  if (savedBeforeDemo){ map = savedBeforeDemo.map; me.current = savedBeforeDemo.current; savedBeforeDemo = null; }
+  pilot.online = false; pilot.ship = '';
+  $('#btnDemo').textContent = 'Mode démo';
+  sel = null; connectShared(); renderAll(); center();
+  if (tok && cfg.clientId) startTracking(); else $('#pTrack').textContent = 'Arrêté';
+}
+
+/* =========================================================
+   Calculs : fin de vie et masse
+   ========================================================= */
+function lifeInfo(l){
+  const now = Date.now(), t = typeInfo(l.wh);
+  const ageMin = l.created ? (now - l.created) / 60000 : null;
+  if (l.eol){
+    const since = l.eolAt || now;
+    return { label:'EOL ≤ ' + fmtDur(240 - (now - since) / 60000), remain:240 - (now - since) / 60000, eol:true };
+  }
+  if (t && t.life && ageMin != null){
+    const remain = t.life * 60 - ageMin;
+    return { label:'≤ ' + fmtDur(remain), remain, eol:false };
+  }
+  return ageMin != null ? { label:'âge ' + fmtDur(ageMin), remain:null, eol:false } : null;
+}
+function massEstimate(l){
+  const t = typeInfo(l.wh);
+  if (!t || !t.total) return null;
+  const used = (l.passes || []).reduce((s, p) => s + (Number(p.mass) || 0), 0);
+  const tMin = t.total * 0.9, tMax = t.total * 1.1;
+  let lo = tMin - used, hi = tMax - used;
+  const st = { fresh:[0.5, 1], reduced:[0.1, 0.5], critical:[0, 0.1] }[l.mass] || [0, 1];
+  const sLo = st[0] * tMin, sHi = st[1] * tMax;
+  let a = Math.max(lo, sLo), b = Math.min(hi, sHi);
+  if (a > b){ a = sLo; b = sHi; }
+  return { total:t.total, jump:t.jump, used, lo:Math.max(0, a), hi:Math.max(0, b) };
+}
+
+/* =========================================================
+   Rendu de la carte
+   ========================================================= */
+const svgNS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent){ const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function applyView(){ $('#vp').setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`); }
+function activePilots(){
+  const now = Date.now(), out = [];
+  for (const id in map.pilots){
+    const p = map.pilots[id]; if (!p) continue;
+    if (tok && String(id) === String(tok.charId)) continue;
+    if (now - (p.t || 0) > 15 * 60000 && !demoMode) continue;
+    out.push(Object.assign({ id }, p));
+  }
+  return out;
+}
+function renderAll(){ render(); renderLog(); renderPilot(); renderPilots(); renderExits(); }
+function render(){
+  const vol = cfg.view === 'vol';
+  $('#map').toggleAttribute('hidden', vol); $('#vol').toggleAttribute('hidden', !vol); $('#volHint').hidden = !vol;
+  $('#btnView').textContent = vol ? 'Vue à plat' : 'Vue volume';
+  $('#btnView').setAttribute('aria-pressed', String(vol));
+  if (vol){ renderVolume(); renderSel(); return; }
+  const gl = $('#links'), gn = $('#nodes'), glab = $('#labels');
+  gl.innerHTML = ''; gn.innerHTML = ''; glab.innerHTML = '';
+  for (const l of linksArr()){
+    const a = map.nodes[l.a], b = map.nodes[l.b];
+    if (!a || !b) continue;
+    const x1 = a.x + NW/2, y1 = a.y + NH/2, x2 = b.x + NW/2, y2 = b.y + NH/2;
+    const isSel = sel && sel.kind === 'link' && sel.id === l.id;
+    const cls = 'link ' + (l.type === 'gate' ? 'gate' : (l.eol ? 'eol ' : '') + l.mass) + (isSel ? ' sel' : '');
+    el('line', { x1, y1, x2, y2, class:cls }, gl);
+    const hit = el('line', { x1, y1, x2, y2, class:'link-hit' }, gl);
+    hit.dataset.link = l.id;
+    if (l.type !== 'gate'){
+      const l1 = [], l2 = [];
+      if (l.wh) l1.push(l.wh);
+      if (l.size && l.size !== '?') l1.push(l.size);
+      const li = lifeInfo(l); if (li && (li.eol || li.remain != null)) l1.push(li.label);
+      const me_ = massEstimate(l); if (me_ && me_.used) l2.push('reste ≈' + fmtMkg((me_.lo + me_.hi) / 2));
+      const lines = [l1.join(' · '), l2.join(' · ')].filter(Boolean);
+      lines.forEach((txt, i) => {
+        const t = el('text', { x:(x1 + x2) / 2, y:(y1 + y2) / 2 - 8 - (lines.length - 1 - i) * 12, 'text-anchor':'middle', class:'lt', fill:l.eol ? 'var(--eol)' : '#a9c1e0' }, glab);
+        t.textContent = txt;
+      });
+    }
+  }
+  const pilotsBySys = {};
+  for (const p of activePilots()){ (pilotsBySys[p.sys] = pilotsBySys[p.sys] || []).push(p.name); }
+  for (const id in map.nodes){
+    const n = map.nodes[id]; if (!n) continue;
+    const c = CLASS[n.cls] || CLASS['?'];
+    const here = me.current == n.id;
+    const g = el('g', { class:'node' + (here ? ' here' : '') + (sel && sel.kind === 'node' && sel.id == n.id ? ' sel' : ''), transform:`translate(${n.x} ${n.y})`, tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, gn);
+    if (here) el('rect', { x:-4, y:-4, width:NW + 8, height:NH + 8, rx:7, class:'halo' }, g);
+    el('rect', { width:NW, height:NH, rx:4, class:'box' }, g);
+    el('rect', { width:5, height:NH, rx:2, fill:c.color }, g);
+    const nm = el('text', { x:14, y:22, class:'nm' }, g); nm.textContent = n.name;
+    const cl = el('text', { x:NW - 10, y:19, 'text-anchor':'end', class:'cls', fill:c.color }, g); cl.textContent = c.label;
+    const ws = whData.systems[n.id];
+    const sub = el('text', { x:14, y:39, class:'sub' }, g);
+    if (isJ(n.cls) && ws && ws.st.length) sub.textContent = ws.st.map(s => `${s}→${destTxt(typeInfo(s))}`).join(' ');
+    else sub.textContent = isJ(n.cls) ? n.region : `${n.region} ${(Math.round(n.sec * 10) / 10).toFixed(1)}`;
+    const line3 = [];
+    const sigs = n.sigs || [];
+    if (sigs.length){ const w = sigs.filter(s => /wormhole|trou de ver/i.test(s.group + ' ' + s.type)).length; line3.push(`${sigs.length} sig${w ? ` (${w} WH)` : ''}`); }
+    const k = activity.kills[n.id];
+    const t3 = el('text', { x:14, y:54, class:'sub' }, g); t3.textContent = line3.join(' · ');
+    if (ws && ws.eff){ const e = el('text', { x:NW - 10, y:54, 'text-anchor':'end', class:'eff' }, g); e.textContent = ws.eff.replace(' Star', '').replace('Cataclysmic Variable', 'Cataclysmic'); }
+    else if (k && (k.ship_kills || k.pod_kills)){ const e = el('text', { x:NW - 10, y:54, 'text-anchor':'end', class:'act' }, g); e.textContent = `☠ ${k.ship_kills + k.pod_kills}/h`; }
+    let labelY = -10;
+    if (here){ const w = el('text', { x:NW/2, y:labelY, 'text-anchor':'middle', class:'who' }, g); w.textContent = '▼ ' + (tok ? tok.charName : 'Vous'); labelY -= 14; }
+    if (pilotsBySys[n.id]){ const w = el('text', { x:NW/2, y:labelY, 'text-anchor':'middle', class:'who other' }, g); w.textContent = pilotsBySys[n.id].join(', '); }
+    g.addEventListener('pointerdown', ev => startDrag(ev, n));
+    g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); select('node', n.id); } });
+  }
+  applyView();
+  renderSel();
+}
+
+
+/* =========================================================
+   Vue en volume : les chaînes partent en relief depuis un système racine
+   (disposition libre, sans les vraies positions)
+   ========================================================= */
+let vcam = { yaw:-0.5, pitch:0.95, k:1, px:0, py:0 };
+const VR = 170, VH = 80, VF = 1600;
+let vfit = 1;
+function volLayout(){
+  const ids = Object.keys(map.nodes).filter(id => map.nodes[id]);
+  const adj = {}; ids.forEach(id => adj[id] = []);
+  for (const l of linksArr()){ const a = String(l.a), b = String(l.b); if (adj[a] && adj[b]){ adj[a].push(b); adj[b].push(a); } }
+  const seen = new Set(), comps = [];
+  const byPriority = ids.slice().sort((a, b) => {
+    const score = id => (String(me.current) === id ? 1000 : 0) + (isK(map.nodes[id].cls) ? 100 : 0) + adj[id].length;
+    return score(b) - score(a);
+  });
+  for (const root of byPriority){
+    if (seen.has(root)) continue;
+    const depth = { [root]:0 }, kids = {}, order = [root]; seen.add(root);
+    for (let i = 0; i < order.length; i++){
+      const u = order[i]; kids[u] = [];
+      for (const v of adj[u].slice().sort()) if (!seen.has(v)){ seen.add(v); depth[v] = depth[u] + 1; kids[u].push(v); order.push(v); }
+    }
+    const leaves = {};
+    const countLeaves = u => leaves[u] = kids[u].length ? kids[u].reduce((s, v) => s + countLeaves(v), 0) : 1;
+    countLeaves(root);
+    const pos = {};
+    const place = (u, a0, a1) => {
+      const d = depth[u], mid = (a0 + a1) / 2;
+      pos[u] = { x:Math.cos(mid) * d * VR, z:Math.sin(mid) * d * VR, y:d * VH, d };
+      let a = a0;
+      for (const v of kids[u]){ const span = (a1 - a0) * leaves[v] / leaves[u]; place(v, a, a + span); a += span; }
+    };
+    place(root, 0, Math.PI * 2);
+    const maxD = Math.max(...Object.values(depth));
+    comps.push({ root, pos, maxD });
+  }
+  let offset = 0; const all = {};
+  comps.forEach((c, i) => {
+    c.rad = Math.max(1, c.maxD) * VR;
+    if (i > 0) offset += comps[i - 1].rad + c.rad + VR * 0.6;
+    c.cx = offset;
+    for (const id in c.pos){ const p = c.pos[id]; all[id] = { x:p.x + offset, y:p.y, z:p.z, d:p.d }; }
+  });
+  const last = comps[comps.length - 1];
+  const shift = comps.length ? ((comps[0].cx - comps[0].rad) + (last.cx + last.rad)) / 2 : 0;
+  for (const id in all) all[id].x -= shift;
+  comps.forEach(c => c.cx -= shift);
+  return { pos:all, comps };
+}
+function project(p){
+  const cy = Math.cos(vcam.yaw), sy = Math.sin(vcam.yaw);
+  const x1 = p.x * cy - p.z * sy, z1 = p.x * sy + p.z * cy;
+  const cp = Math.cos(vcam.pitch), sp = Math.sin(vcam.pitch);
+  const scrY = z1 * sp - p.y * cp;
+  const depth = z1 * cp + p.y * sp;
+  const s = VF / (VF - depth);
+  const r = $('#vol').getBoundingClientRect();
+  const k = vcam.k * vfit;
+  return { x:r.width / 2 + vcam.px + x1 * s * k, y:r.height / 2 + vcam.py + scrY * s * k, s:s * k, depth };
+}
+function volGradients(){
+  const defs = $('#volDefs'); if (defs.childNodes.length) return;
+  for (const key in CLASS){
+    const g = el('radialGradient', { id:'vg-' + key.replace('?', 'U'), cx:'35%', cy:'30%', r:'70%' }, defs);
+    el('stop', { offset:'0%', style:'stop-color:#ffffff;stop-opacity:.95' }, g);
+    el('stop', { offset:'35%', style:`stop-color:${CLASS[key].color}` }, g);
+    el('stop', { offset:'100%', style:'stop-color:#05070d' }, g);
+  }
+}
+function renderVolume(){
+  volGradients();
+  const scene = $('#volScene'); scene.innerHTML = '';
+  const { pos, comps } = volLayout();
+  const ids = Object.keys(pos);
+  if (!ids.length){
+    const r = $('#vol').getBoundingClientRect();
+    const t = el('text', { x:r.width / 2, y:r.height / 2, 'text-anchor':'middle', fill:'var(--dim)', 'font-size':14 }, scene);
+    t.textContent = 'La carte est vide : sautez dans un système ou ajoutez-en un.';
+    return;
+  }
+  // Cadrage automatique : toute la carte tient dans la vue
+  let ext = VR;
+  for (const c of comps) ext = Math.max(ext, Math.abs(c.cx) + c.rad);
+  for (const id of ids){ const q = pos[id]; ext = Math.max(ext, Math.hypot(q.x, q.z) + q.y * 0.5); }
+  const box = $('#vol').getBoundingClientRect();
+  vfit = Math.min(1.6, Math.min(box.width * 0.47, box.height * 0.55) / ext);
+  // Anneaux au sol : un par niveau de chaîne
+  for (const c of comps){
+    for (let d = 1; d <= c.maxD; d++){
+      const pts = [];
+      for (let i = 0; i <= 72; i++){ const a = i / 72 * Math.PI * 2; const q = project({ x:c.cx + Math.cos(a) * d * VR, y:0, z:Math.sin(a) * d * VR }); pts.push(q.x.toFixed(1) + ',' + q.y.toFixed(1)); }
+      el('polyline', { points:pts.join(' '), class:'ring' }, scene);
+    }
+  }
+  const P = {}; for (const id of ids){ P[id] = project(pos[id]); P[id].floor = project({ x:pos[id].x, y:0, z:pos[id].z }); }
+  // Ombres et tiges (toujours derrière)
+  for (const id of ids){
+    const p = P[id], f = p.floor, rad = 12 * f.s;
+    el('ellipse', { cx:f.x, cy:f.y, rx:rad, ry:rad * Math.sin(vcam.pitch) * 0.6, class:'shadow' }, scene);
+    if (pos[id].y > 0) el('line', { x1:f.x, y1:f.y, x2:p.x, y2:p.y, class:'stem' }, scene);
+  }
+  // Liens et systèmes triés du plus loin au plus proche
+  const items = [];
+  for (const l of linksArr()){
+    const a = P[String(l.a)], b = P[String(l.b)]; if (!a || !b) continue;
+    items.push({ kind:'link', l, a, b, depth:(a.depth + b.depth) / 2 - 1 });
+  }
+  for (const id of ids) items.push({ kind:'node', id, p:P[id], depth:P[id].depth });
+  items.sort((u, v) => u.depth - v.depth);
+  const pilotsBySys = {};
+  for (const p of activePilots()) (pilotsBySys[p.sys] = pilotsBySys[p.sys] || []).push(p.name);
+  for (const it of items){
+    if (it.kind === 'link'){
+      const l = it.l, w = Math.max(1.2, 3 * (it.a.s + it.b.s) / 2);
+      const isSel = sel && sel.kind === 'link' && sel.id === l.id;
+      const cls = 'link ' + (l.type === 'gate' ? 'gate' : (l.eol ? 'eol ' : '') + l.mass) + (isSel ? ' sel' : '');
+      el('line', { x1:it.a.x, y1:it.a.y, x2:it.b.x, y2:it.b.y, class:cls, style:`stroke-width:${w.toFixed(2)}px` }, scene);
+      const hit = el('line', { x1:it.a.x, y1:it.a.y, x2:it.b.x, y2:it.b.y, class:'link-hit' }, scene); hit.dataset.link = l.id;
+      if (l.type !== 'gate' && (l.wh || l.eol)){
+        const li = lifeInfo(l);
+        const t = el('text', { x:(it.a.x + it.b.x) / 2, y:(it.a.y + it.b.y) / 2 - 6, 'text-anchor':'middle', class:'lt', fill:l.eol ? 'var(--eol)' : '#a9c1e0' }, scene);
+        t.textContent = [l.wh, l.eol && li ? li.label : ''].filter(Boolean).join(' · ');
+      }
+      continue;
+    }
+    const n = map.nodes[it.id], p = it.p, c = CLASS[n.cls] || CLASS['?'];
+    const rad = Math.max(6, 15 * p.s);
+    const g = el('g', { class:'vnode', tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, scene);
+    g.dataset.node = it.id;
+    if (String(me.current) === String(it.id)) el('circle', { cx:p.x, cy:p.y, r:rad + 5, class:'halo' }, g);
+    el('circle', { cx:p.x, cy:p.y, r:rad, fill:`url(#vg-${(n.cls in CLASS ? n.cls : '?').replace('?', 'U')})` }, g);
+    if (sel && sel.kind === 'node' && String(sel.id) === String(it.id)) el('circle', { cx:p.x, cy:p.y, r:rad + 3, class:'vsel' }, g);
+    const fs = Math.max(10, Math.min(20, 14 * p.s));
+    const t = el('text', { x:p.x, y:p.y + rad + fs + 2, 'text-anchor':'middle', class:'vname', 'font-size':fs }, g); t.textContent = n.name;
+    const ws = whData.systems[n.id];
+    const sub = [c.label]; if (ws && ws.st && ws.st.length) sub.push(ws.st.join(' ')); if (ws && ws.eff) sub.push(ws.eff.replace(' Star', ''));
+    const t2 = el('text', { x:p.x, y:p.y + rad + fs * 2 + 2, 'text-anchor':'middle', class:'vcls', 'font-size':Math.max(9, fs * 0.62), fill:c.color }, g); t2.textContent = sub.join(' · ');
+    const who = [];
+    if (String(me.current) === String(it.id)) who.push('▼ ' + (tok ? tok.charName : 'Vous'));
+    if (pilotsBySys[it.id]) who.push(pilotsBySys[it.id].join(', '));
+    if (who.length){ const w = el('text', { x:p.x, y:p.y - rad - 8, 'text-anchor':'middle', class:'who' + (who.length === 1 && !String(me.current).length ? ' other' : ''), 'font-size':11 }, g); w.textContent = who.join(' · '); }
+    g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); select('node', it.id); } });
+  }
+}
+(() => {
+  const vs = $('#vol'); let vd = null;
+  vs.addEventListener('pointerdown', ev => {
+    const linkId = ev.target.dataset && ev.target.dataset.link;
+    if (linkId){ select('link', linkId); return; }
+    const g = ev.target.closest && ev.target.closest('.vnode');
+    vd = { sx:ev.clientX, sy:ev.clientY, yaw:vcam.yaw, pitch:vcam.pitch, px:vcam.px, py:vcam.py, pan:ev.shiftKey, node:g ? g.dataset.node : null, moved:false };
+    vs.classList.add('panning'); try{ vs.setPointerCapture(ev.pointerId); }catch(e){}
+  });
+  vs.addEventListener('pointermove', ev => {
+    if (!vd) return;
+    const dx = ev.clientX - vd.sx, dy = ev.clientY - vd.sy;
+    if (Math.abs(dx) + Math.abs(dy) > 3) vd.moved = true;
+    if (!vd.moved) return;
+    if (vd.pan){ vcam.px = vd.px + dx; vcam.py = vd.py + dy; }
+    else { vcam.yaw = vd.yaw + dx * 0.008; vcam.pitch = Math.min(1.45, Math.max(0.25, vd.pitch - dy * 0.006)); }
+    renderVolume();
+  });
+  vs.addEventListener('pointerup', () => {
+    if (!vd) return;
+    if (!vd.moved){ if (vd.node) select('node', vd.node); else { sel = null; render(); } }
+    vd = null; vs.classList.remove('panning');
+  });
+  vs.addEventListener('wheel', ev => { ev.preventDefault(); vcam.k = Math.min(3, Math.max(0.3, vcam.k * (ev.deltaY < 0 ? 1.12 : 1 / 1.12))); renderVolume(); }, { passive:false });
+  window.addEventListener('resize', () => { if (cfg.view === 'vol') renderVolume(); });
+})();
+/* =========================================================
+   Interactions carte
+   ========================================================= */
+let drag = null;
+const svg = $('#map');
+function startDrag(ev, n){
+  ev.stopPropagation();
+  drag = { n, sx:ev.clientX, sy:ev.clientY, ox:n.x, oy:n.y, moved:false };
+  try{ svg.setPointerCapture(ev.pointerId); }catch(e){}
+}
+svg.addEventListener('pointerdown', ev => {
+  if (drag) return;
+  if (ev.target.dataset && ev.target.dataset.link){ select('link', ev.target.dataset.link); return; }
+  drag = { pan:true, sx:ev.clientX, sy:ev.clientY, ox:view.x, oy:view.y, moved:false };
+  svg.classList.add('panning'); try{ svg.setPointerCapture(ev.pointerId); }catch(e){}
+});
+svg.addEventListener('pointermove', ev => {
+  if (!drag) return;
+  const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
+  if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+  if (drag.pan){ view.x = drag.ox + dx; view.y = drag.oy + dy; applyView(); }
+  else if (drag.moved){ drag.n.x = Math.round(drag.ox + dx / view.k); drag.n.y = Math.round(drag.oy + dy / view.k); render(); }
+});
+svg.addEventListener('pointerup', () => {
+  if (!drag) return;
+  if (drag.pan){ if (!drag.moved){ sel = null; render(); } }
+  else if (drag.moved) patch(`nodes/${drag.n.id}`, { x:drag.n.x, y:drag.n.y });
+  else select('node', drag.n.id);
+  drag = null; svg.classList.remove('panning');
+});
+svg.addEventListener('wheel', ev => { ev.preventDefault(); zoomAt(ev.deltaY < 0 ? 1.12 : 1 / 1.12, ev.offsetX, ev.offsetY); }, { passive:false });
+function zoomAt(f, cx, cy){
+  const k = Math.min(2.5, Math.max(0.3, view.k * f));
+  view.x = cx - (cx - view.x) * (k / view.k); view.y = cy - (cy - view.y) * (k / view.k); view.k = k; applyView();
+}
+function center(){
+  const ns = Object.values(map.nodes).filter(Boolean); const r = svg.getBoundingClientRect();
+  if (!ns.length){ view = { x:0, y:0, k:1 }; applyView(); return; }
+  const target = map.nodes[me.current] || ns[0];
+  view.k = 1; view.x = r.width / 2 - (target.x + NW / 2); view.y = r.height / 2 - (target.y + NH / 2); applyView();
+}
+
+/* =========================================================
+   Panneau de sélection
+   ========================================================= */
+function select(kind, id){ sel = { kind, id }; if (kind === 'node') loadZkill(id); render(); }
+let lastSelKey = '';
+function renderSel(){
+  const box = $('#selBody');
+  if (!sel){ lastSelKey = ''; box.className = 'empty'; box.innerHTML = 'Cliquez sur un système ou une connexion de la carte.'; return; }
+  // Ne pas reconstruire le panneau si l'utilisateur est en train d'écrire dedans
+  const key = sel.kind + ':' + sel.id;
+  if (key === lastSelKey && box.contains(document.activeElement) && /TEXTAREA|INPUT|SELECT/.test(document.activeElement.tagName)) return;
+  lastSelKey = key;
+  box.className = '';
+  if (sel.kind === 'node') renderNodePanel(box); else renderLinkPanel(box);
+}
+function renderNodePanel(box){
+  const n = map.nodes[sel.id]; if (!n){ sel = null; renderSel(); return; }
+  const c = CLASS[n.cls] || CLASS['?'];
+  const ws = whData.systems[n.id];
+  const k = activity.kills[n.id], j = activity.jumps[n.id];
+  const z = zkill[n.id];
+  const sigRows = (n.sigs || []).map(s => `<tr class="${/wormhole|trou de ver/i.test(s.group + ' ' + s.type) ? 'wh' : ''}"><td class="id">${esc(s.id)}</td><td>${esc(s.group || '–')}</td><td>${esc(s.type || '')}</td><td class="mono r">${esc(s.strength || '')}</td></tr>`).join('');
+  let staticsHtml = '';
+  if (isJ(n.cls)){
+    if (ws && ws.st.length) staticsHtml = ws.st.map(s => { const t = typeInfo(s); return `<span class="chip" title="${t ? esc(`Masse totale ${fmtMkg(t.total)}, par saut ${fmtMkg(t.jump)}, durée ${t.life} h`) : ''}">${esc(s)} → ${esc(destTxt(t))}</span>`; }).join(' ');
+    else staticsHtml = whData.loaded ? '<span class="dim">Aucune connue</span>' : (whData.error ? '<span class="dim">Données indisponibles</span>' : '<span class="dim">Chargement…</span>');
+  }
+  box.innerHTML = `
+    <div class="row"><span class="big">${esc(n.name)}</span><span class="badge" style="background:${c.color}">${esc(c.label)}</span></div>
+    <dl class="kv">
+      <dt>Région</dt><dd>${esc(n.region)}</dd>
+      ${isJ(n.cls) ? '' : `<dt>Sécurité</dt><dd class="mono">${(Math.round(n.sec * 10) / 10).toFixed(1)}</dd>`}
+      ${isJ(n.cls) ? `<dt>Statics</dt><dd class="row" style="gap:4px">${staticsHtml}</dd>` : ''}
+      ${ws && ws.eff ? `<dt>Effet</dt><dd><b>${esc(ws.eff)}</b><br><span class="dim">${esc(EFFECTS[ws.eff] || '')}</span></dd>` : ''}
+      <dt>Activité</dt><dd>${k ? `${k.ship_kills} vaisseau(x), ${k.pod_kills} capsule(s), ${k.npc_kills} PNJ tués` : 'Aucun kill'} <span class="dim">(dernière heure)</span>${j != null ? `<br>${fmtInt(j)} saut(s) dans la dernière heure` : ''}
+        ${isRealId(n.id) ? `<br>zKillboard 24 h : ${z && z.n != null ? `<b>${z.n}${z.n >= 200 ? '+' : ''}</b> kill(s)` : '<span class="dim">–</span>'} · <a href="https://zkillboard.com/system/${n.id}/" target="_blank" rel="noopener">voir</a>` : ''}</dd>
+    </dl>
+    <label class="f">Notes partagées (habitants, structures, dangers…)<textarea id="nNotes">${esc(n.notes)}</textarea></label>
+    <h3>Signatures</h3>
+    <label class="f">Dans le scanner du jeu : Ctrl+A, Ctrl+C, puis collez ici
+      <textarea id="nSigPaste" placeholder="ABC-123	Signature cosmique	Trou de ver	Trou de ver instable	100,0 %	4,28 UA"></textarea></label>
+    <div class="row">
+      <button type="button" id="nSigAdd">Importer</button>
+      <label class="row" style="font-size:12px;gap:4px"><input type="checkbox" id="nSigReplace"> Retirer les signatures disparues</label>
+      <button type="button" class="small" id="nSigClear">Tout effacer</button>
+    </div>
+    ${sigRows ? `<table><thead><tr><th>ID</th><th>Groupe</th><th>Type</th><th class="r">%</th></tr></thead><tbody>${sigRows}</tbody></table>` : '<span class="empty">Aucune signature enregistrée.</span>'}
+    <div class="row"><button type="button" class="danger" id="nDel">Retirer ce système</button></div>`;
+  let nt = null;
+  $('#nNotes').addEventListener('input', e => { const v = e.target.value; clearTimeout(nt); nt = setTimeout(() => put(`nodes/${n.id}/notes`, v), 500); });
+  $('#nSigAdd').addEventListener('click', () => {
+    const res = importSigs(n.sigs || [], $('#nSigPaste').value, $('#nSigReplace').checked);
+    if (!res.count){ toast('Aucune signature reconnue dans le texte collé.', true); return; }
+    put(`nodes/${n.id}/sigs`, res.list); lastSelKey = '';
+    toast(`${res.count} signature(s) importée(s)` + (res.removed ? `, ${res.removed} retirée(s)` : ''));
+  });
+  $('#nSigClear').addEventListener('click', () => { put(`nodes/${n.id}/sigs`, []); lastSelKey = ''; });
+  $('#nDel').addEventListener('click', () => {
+    linksArr().filter(l => l.a == n.id || l.b == n.id).forEach(l => put(`links/${l.id}`, null));
+    put(`nodes/${n.id}`, null);
+    if (me.current == n.id){ me.current = null; saveMe(); }
+    sel = null; lastSelKey = '';
+  });
+}
+function importSigs(existing, text, replace){
+  const list = existing.map(s => Object.assign({}, s));
+  const seen = new Set(); let count = 0;
+  for (const line of String(text).split(/\r?\n/)){
+    const p = line.split('\t').map(s => s.trim());
+    if (!/^[A-Z]{3}-\d{3}$/.test(p[0] || '')) continue;
+    const s = { id:p[0], group:p[2] || '', type:p[3] || '', strength:p[4] || '' };
+    seen.add(s.id);
+    const i = list.findIndex(x => x.id === s.id);
+    if (i >= 0){ const o = list[i]; list[i] = { id:s.id, group:s.group || o.group, type:s.type || o.type, strength:s.strength || o.strength }; }
+    else list.push(s);
+    count++;
+  }
+  let removed = 0, out = list;
+  if (replace && count){ out = list.filter(s => seen.has(s.id)); removed = list.length - out.length; }
+  out.sort((a, b) => a.id.localeCompare(b.id));
+  return { list:out, count, removed };
+}
+function renderLinkPanel(box){
+  const l = map.links[sel.id]; if (!l){ sel = null; renderSel(); return; }
+  const a = map.nodes[l.a], b = map.nodes[l.b];
+  const ageMin = l.created ? (Date.now() - l.created) / 60000 : null;
+  const t = typeInfo(l.wh);
+  const types = Object.keys(whData.types).sort();
+  const li = lifeInfo(l);
+  const est = massEstimate(l);
+  const ships = cfg.ships && cfg.ships.length ? cfg.ships : [{ name:'Mon vaisseau', cold:'', hot:'' }];
+  const passRows = (l.passes || []).slice(-8).reverse().map(p => `<tr><td>${esc(p.who || '?')}</td><td>${esc(p.ship || '')}</td><td class="mono r">${fmtMkg(p.mass)}</td><td class="mono">${p.hot ? 'chaud' : 'froid'}</td></tr>`).join('');
+  box.innerHTML = `
+    <div class="big" style="font-size:1.5rem">${esc(a ? a.name : '?')} ↔ ${esc(b ? b.name : '?')}</div>
+    ${ageMin != null ? `<div class="dim">Découverte il y a ${fmtDur(ageMin)}${li && li.remain != null ? ` · <b style="color:${li.eol ? 'var(--eol)' : 'var(--text)'}">${li.eol ? 'se ferme dans moins de ' + fmtDur(li.remain) : 'au plus ' + fmtDur(li.remain) + ' de vie restante'}</b>` : ''}</div>` : ''}
+    <div class="grid2">
+      <label class="f">Type<select id="lType"><option value="wh">Trou de ver</option><option value="gate">Porte stellaire</option></select></label>
+      <label class="f">Code du trou
+        ${types.length ? `<select id="lWh"><option value="">Inconnu / K162</option>${types.map(c => { const ti = whData.types[c]; return `<option value="${esc(c)}">${esc(c)} → ${esc(destTxt(ti))}</option>`; }).join('')}</select>` : `<input id="lWh" placeholder="ex. H296" class="mono">`}
+      </label>
+      <label class="f">Masse<select id="lMass"><option value="fresh">Stable (plus de 50 %)</option><option value="reduced">Réduite (moins de 50 %)</option><option value="critical">Critique (moins de 10 %)</option></select></label>
+      <label class="f">Taille max<select id="lSize"><option value="?">Inconnue</option><option value="S">S : frégates, destroyers</option><option value="M">M : jusqu'aux croiseurs de combat</option><option value="L">L : cuirassés</option><option value="XL">XL : capitaux</option></select></label>
+    </div>
+    <label class="row" style="font-size:13px"><input type="checkbox" id="lEol"> Fin de vie (EOL, moins de 4 h)</label>
+    ${t ? `<div class="box res">Destination <b>${esc(destTxt(t))}</b> · masse totale <b>${fmtMkg(t.total)}</b> (±10 %) · par saut <b>${fmtMkg(t.jump)}</b> · durée de vie <b>${t.life} h</b>${t.regen ? ` · régénère ${fmtMkg(t.regen)}/jour` : ''}</div>` : ''}
+    ${l.type !== 'gate' ? `
+    <h3>Masse et fermeture du trou</h3>
+    ${est ? `<div class="box res">Masse restante estimée : <b>${fmtMkg(est.lo)}</b> à <b>${fmtMkg(est.hi)}</b><br>Déjà passée (notée) : ${fmtMkg(est.used)}</div>` : `<p class="note">Choisissez le code du trou pour estimer la masse restante.</p>`}
+    <div class="grid2">
+      <label class="f">Vaisseau<select id="rShip">${ships.map((s, i) => `<option value="${i}">${esc(s.name || 'Vaisseau ' + (i + 1))}</option>`).join('')}<option value="new">+ Nouveau vaisseau…</option></select></label>
+      <label class="f">Nom<input id="rName" value=""></label>
+      <label class="f">Masse à froid (kg)<input id="rCold" class="mono" inputmode="numeric" placeholder="ex. 100 000 000"></label>
+      <label class="f">Masse à chaud (kg, propulsion allumée)<input id="rHot" class="mono" inputmode="numeric" placeholder="ex. 150 000 000"></label>
+    </div>
+    <p class="note">La masse se lit en jeu : clic droit sur le vaisseau, Informations, onglet Attributs. Un MWD ou un AB allumé ajoute de la masse.</p>
+    <div class="row"><button type="button" class="small" id="rSave">Enregistrer ce vaisseau</button><button type="button" class="small" id="rDelShip">Supprimer</button></div>
+    <div class="box res" id="rOut"></div>
+    <div class="row"><button type="button" id="pCold">Ajouter un passage à froid</button><button type="button" id="pHot">Ajouter un passage à chaud</button>${(l.passes || []).length ? '<button type="button" class="small" id="pUndo">Annuler le dernier</button>' : ''}</div>
+    ${passRows ? `<table><thead><tr><th>Pilote</th><th>Vaisseau</th><th class="r">Masse</th><th>Mode</th></tr></thead><tbody>${passRows}</tbody></table>` : ''}
+    ` : ''}
+    <div class="row"><button type="button" class="danger" id="lDel">Supprimer la connexion</button></div>`;
+  $('#lType').value = l.type; $('#lMass').value = l.mass; $('#lSize').value = l.size || '?'; $('#lEol').checked = !!l.eol;
+  const whEl = $('#lWh'); whEl.value = l.wh || '';
+  $('#lType').addEventListener('change', e => { put(`links/${l.id}/type`, e.target.value); lastSelKey = ''; });
+  $('#lMass').addEventListener('change', e => { put(`links/${l.id}/mass`, e.target.value); lastSelKey = ''; });
+  $('#lSize').addEventListener('change', e => put(`links/${l.id}/size`, e.target.value));
+  whEl.addEventListener('change', e => {
+    const code = e.target.value.trim().toUpperCase(); const ti = typeInfo(code);
+    const upd = { wh:code };
+    if (ti && ti.jump && (!l.size || l.size === '?')) upd.size = ti.jump <= 5e6 ? 'S' : ti.jump <= 62e6 ? 'M' : ti.jump <= 375e6 ? 'L' : 'XL';
+    patch(`links/${l.id}`, upd); lastSelKey = '';
+  });
+  $('#lEol').addEventListener('change', e => { patch(`links/${l.id}`, { eol:e.target.checked, eolAt:e.target.checked ? Date.now() : null }); lastSelKey = ''; });
+  $('#lDel').addEventListener('click', () => { put(`links/${l.id}`, null); sel = null; lastSelKey = ''; });
+  if (l.type === 'gate') return;
+
+  const shipSel = $('#rShip');
+  if (shipDraft && shipSel.querySelector(`option[value="${shipDraft.idx}"]`)) shipSel.value = shipDraft.idx;
+  const keepDraft = () => { shipDraft = { idx:shipSel.value, name:$('#rName').value, cold:$('#rCold').value, hot:$('#rHot').value }; };
+  const loadShip = (useDraft) => {
+    if (useDraft === true && shipDraft){ $('#rName').value = shipDraft.name; $('#rCold').value = shipDraft.cold; $('#rHot').value = shipDraft.hot; calc(); return; }
+    const v = shipSel.value; const s = v === 'new' ? { name:'', cold:'', hot:'' } : (ships[Number(v)] || {});
+    $('#rName').value = s.name || ''; $('#rCold').value = s.cold ? fmtInt(s.cold) : ''; $('#rHot').value = s.hot ? fmtInt(s.hot) : '';
+    keepDraft(); calc();
+  };
+  const calc = () => {
+    const cold = parseKg($('#rCold').value), hot = parseKg($('#rHot').value) || cold;
+    const out = $('#rOut');
+    if (!cold){ out.innerHTML = 'Indiquez la masse de votre vaisseau pour calculer les passages.'; return; }
+    const lines = [];
+    const tj = t && t.jump;
+    if (tj && hot > tj) lines.push(`<span class="badline">À chaud, ce vaisseau dépasse la masse maximale par saut (${fmtMkg(tj)}) : il ne peut pas passer propulsion allumée.</span>`);
+    if (tj && cold > tj) lines.push(`<span class="badline">Même à froid, ce vaisseau est trop lourd pour ce trou.</span>`);
+    if (est){
+      const rt = hot + cold;
+      const minRT = Math.ceil(est.lo / (2 * hot)), maxRT = Math.ceil(est.hi / (2 * hot));
+      lines.push(`Allers-retours à chaud pour fermer : <b>${minRT}</b> à <b>${maxRT}</b>`);
+      lines.push(`Un aller à chaud + retour à froid consomme <b>${fmtMkg(rt)}</b>`);
+      if (est.hi <= hot) lines.push(`<span class="warnline">Un seul passage à chaud peut suffire à fermer le trou : si vous passez, vous risquez de rester bloqué de l'autre côté.</span>`);
+      else if (est.lo <= rt) lines.push(`<span class="warnline">Le prochain aller-retour peut fermer le trou : faites l'aller à chaud et le retour à froid, et surveillez l'état avant de revenir.</span>`);
+    } else lines.push('Choisissez le code du trou pour calculer le nombre de passages.');
+    out.innerHTML = lines.join('<br>');
+  };
+  shipSel.addEventListener('change', loadShip);
+  ['#rCold', '#rHot', '#rName'].forEach(s => $(s).addEventListener('input', () => { keepDraft(); calc(); }));
+  $('#rSave').addEventListener('click', () => {
+    const s = { name:$('#rName').value.trim() || 'Vaisseau', cold:parseKg($('#rCold').value), hot:parseKg($('#rHot').value) || parseKg($('#rCold').value) };
+    if (!s.cold){ toast('Indiquez au moins la masse à froid.', true); return; }
+    cfg.ships = (cfg.ships || []).slice();
+    const v = shipSel.value; if (v === 'new' || !cfg.ships[Number(v)]) cfg.ships.push(s); else cfg.ships[Number(v)] = s;
+    if (v === 'new') shipDraft = null; else keepDraft();
+    saveCfg(); lastSelKey = ''; renderSel(); toast('Vaisseau enregistré dans ce navigateur');
+  });
+  $('#rDelShip').addEventListener('click', () => { const v = Number(shipSel.value); if (cfg.ships && cfg.ships[v]){ cfg.ships.splice(v, 1); shipDraft = null; saveCfg(); lastSelKey = ''; renderSel(); } });
+  const addPass = hotMode => {
+    const cold = parseKg($('#rCold').value), hot = parseKg($('#rHot').value) || cold;
+    const mass = hotMode ? hot : cold;
+    if (!mass){ toast('Indiquez la masse du vaisseau.', true); return; }
+    const passes = (l.passes || []).concat([{ who:tok ? tok.charName : 'Moi', ship:$('#rName').value.trim(), mass, hot:hotMode, t:Date.now() }]);
+    put(`links/${l.id}/passes`, passes); lastSelKey = '';
+  };
+  $('#pCold').addEventListener('click', () => addPass(false));
+  $('#pHot').addEventListener('click', () => addPass(true));
+  const undo = $('#pUndo'); if (undo) undo.addEventListener('click', () => { put(`links/${l.id}/passes`, (l.passes || []).slice(0, -1)); lastSelKey = ''; });
+  loadShip(true);
+}
+
+/* =========================================================
+   Sorties vers le k-space et itinéraires
+   ========================================================= */
+let exitsResult = {};
+let shipDraft = null;
+function renderExits(){
+  const box = $('#exitsBody');
+  const exits = Object.values(map.nodes).filter(n => n && isK(n.cls) && isRealId(n.id));
+  if (!exits.length){ box.className = 'empty'; box.innerHTML = demoMode ? 'Les itinéraires ne sont pas calculés en mode démo.' : 'Aucun système en k-space sur la carte.'; return; }
+  box.className = '';
+  const dests = HUBS.concat(cfg.home ? [cfg.home] : []);
+  const rows = exits.map(n => `<tr><td><b>${esc(n.name)}</b></td>${dests.map(d => { const v = exitsResult[n.id + '>' + d.id]; return `<td class="mono r">${v === undefined ? '·' : v === null ? '?' : v}</td>`; }).join('')}</tr>`).join('');
+  box.innerHTML = `<div style="overflow-x:auto"><table><thead><tr><th>Sortie</th>${dests.map(d => `<th class="r">${esc(d.name)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="row"><button type="button" class="small" id="btnRoutes">Calculer les sauts</button><span class="note">Itinéraire le plus court, par les portes.</span></div>`;
+  $('#btnRoutes').addEventListener('click', async () => {
+    const b = $('#btnRoutes'); b.disabled = true; b.textContent = 'Calcul…';
+    for (const n of exits) for (const d of dests){ exitsResult[n.id + '>' + d.id] = await routeJumps(n.id, d.id); }
+    renderExits();
+  });
+}
+
+/* =========================================================
+   Pilote, pilotes de la corpo, journal
+   ========================================================= */
+function renderPilot(){
+  const ph = $('#portrait');
+  if (tok){
+    $('#pName').textContent = tok.charName;
+    if (!ph.querySelector('img')) ph.innerHTML = `<img alt="" src="https://images.evetech.net/characters/${tok.charId}/portrait?size=64">`;
+    $('#btnLogin').textContent = 'Déconnexion'; $('#btnLogin').classList.remove('primary');
+  } else {
+    if (!demoMode) $('#pName').textContent = 'Non connecté';
+    ph.innerHTML = '';
+    $('#btnLogin').textContent = 'Connexion EVE'; $('#btnLogin').classList.add('primary');
+  }
+  $('#pStatus').innerHTML = `<span class="dot ${pilot.online ? 'on' : ''}"></span>${pilot.online ? 'En ligne' : 'Hors ligne'}`;
+  const cur = map.nodes[me.current];
+  $('#pSys').innerHTML = cur ? `<b>${esc(cur.name)}</b> <span class="dim">${esc((CLASS[cur.cls] || CLASS['?']).label)}</span>` : '–';
+  $('#pShip').textContent = pilot.ship || '–';
+}
+function renderPilots(){
+  const ps = activePilots();
+  $('#pilotsCard').hidden = !ps.length;
+  $('#pilotsList').innerHTML = ps.map(p => { const n = map.nodes[p.sys]; return `<div><span class="dot ${p.online ? 'on' : ''}"></span><b>${esc(p.name)}</b> <span class="dim">${n ? 'à ' + esc(n.name) : 'hors carte'}${p.ship ? ' · ' + esc(p.ship) : ''}</span></div>`; }).join('');
+}
+function renderLog(){
+  const box = $('#log');
+  const entries = Object.values(map.log).filter(Boolean).sort((a, b) => b.t - a.t).slice(0, 50);
+  if (!entries.length){ box.innerHTML = '<span class="empty">Aucun saut pour l\'instant.</span>'; return; }
+  box.innerHTML = entries.map(e => `<div><span class="dim">${new Date(e.t).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}</span> ${e.who ? `<span class="dim">${esc(e.who)} :</span> ` : ''}${esc(e.from)} → <b>${esc(e.to)}</b></div>`).join('');
+}
+
+/* =========================================================
+   Barre d'outils
+   ========================================================= */
+async function resolveSystem(name){
+  const r = await fetch(ESI + '/universe/ids/', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify([name]) });
+  if (!r.ok) throw new Error('Recherche impossible (' + r.status + ')');
+  const j = await r.json();
+  return j.systems && j.systems[0];
+}
+$('#addForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const name = $('#addName').value.trim(); if (!name) return;
+  try{
+    const s = await resolveSystem(name);
+    if (!s){ toast(`Système « ${name} » introuvable.`, true); return; }
+    const near = sel && sel.kind === 'node' ? sel.id : me.current;
+    await ensureNode(s.id, map.nodes[near] ? near : null);
+    if (sel && sel.kind === 'node' && sel.id != s.id && !linkBetween(sel.id, s.id)) addLink(sel.id, s.id, await gateConnected(sel.id, s.id));
+    select('node', s.id); $('#addName').value = '';
+  }catch(e){ toast(e.message, true); }
+});
+$('#btnDemo').addEventListener('click', startDemo);
+$('#btnCenter').addEventListener('click', () => { if (cfg.view === 'vol'){ vcam = { yaw:-0.5, pitch:0.95, k:1, px:0, py:0 }; renderVolume(); } else center(); });
+$('#btnView').addEventListener('click', () => { cfg.view = cfg.view === 'vol' ? 'flat' : 'vol'; saveCfg(); render(); if (cfg.view !== 'vol') center(); });
+$('#zin').addEventListener('click', () => { if (cfg.view === 'vol'){ vcam.k = Math.min(3, vcam.k * 1.2); renderVolume(); return; } const r = svg.getBoundingClientRect(); zoomAt(1.2, r.width / 2, r.height / 2); });
+$('#zout').addEventListener('click', () => { if (cfg.view === 'vol'){ vcam.k = Math.max(0.3, vcam.k / 1.2); renderVolume(); return; } const r = svg.getBoundingClientRect(); zoomAt(1 / 1.2, r.width / 2, r.height / 2); });
+$('#btnClear').addEventListener('click', () => {
+  const b = $('#btnClear');
+  if (b.dataset.confirm){
+    put('nodes', null); put('links', null); put('log', null);
+    me.current = null; saveMe(); sel = null; lastSelKey = '';
+    b.textContent = 'Vider la carte'; delete b.dataset.confirm; return;
+  }
+  b.textContent = shared() ? 'Vider pour toute la corpo ?' : 'Confirmer ?'; b.dataset.confirm = '1';
+  setTimeout(() => { b.textContent = 'Vider la carte'; delete b.dataset.confirm; }, 3500);
+});
+$('#btnExport').addEventListener('click', () => {
+  const data = { nodes:map.nodes, links:map.links };
+  const blob = new Blob([JSON.stringify(data, null, 1)], { type:'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'carte-wh-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+$('#btnImport').addEventListener('click', () => $('#fileImport').click());
+$('#fileImport').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try{
+    const m = normalize(JSON.parse(await f.text()));
+    if (!Object.keys(m.nodes).length) throw 0;
+    put('nodes', m.nodes); put('links', m.links);
+    sel = null; center(); toast('Carte importée');
+  }catch(err){ toast('Ce fichier n\'est pas une carte valide.', true); }
+  e.target.value = '';
+});
+$('#btnLogin').addEventListener('click', () => tok ? logout() : login());
+
+/* =========================================================
+   Réglages et partage
+   ========================================================= */
+function randomRoom(){ return b64url(crypto.getRandomValues(new Uint8Array(24))).replace(/[-_]/g, 'x'); }
+function inviteLink(){
+  const payload = b64url(new TextEncoder().encode(JSON.stringify({ db:cfg.db, room:cfg.room, cid:cfg.clientId })));
+  return callbackUrl + '#rejoindre=' + payload;
+}
+function refreshShareUi(){
+  const on = !!(cfg.db && cfg.room);
+  $('#shareState').textContent = on ? 'Carte partagée active : vos corpmates voient la même carte en direct.' : 'Carte locale : elle n\'est visible que dans ce navigateur.';
+  $('#btnCreateShare').hidden = on; $('#btnLeaveShare').hidden = !on;
+  $('#shareLinkBox').hidden = !on;
+  if (on) $('#shareLink').value = inviteLink();
+}
+function openSetup(){
+  $('#cbUrl').textContent = callbackUrl; $('#clientId').value = cfg.clientId || ''; $('#pollSel').value = String(cfg.poll || 5);
+  $('#dbUrl').value = cfg.db || ''; $('#homeName').value = cfg.home ? cfg.home.name : '';
+  refreshShareUi(); $('#setup').classList.add('open'); $('#clientId').focus();
+}
+function closeSetup(){ $('#setup').classList.remove('open'); }
+function normDb(v){ v = (v || '').trim().replace(/\/+$/, ''); if (v && !/^https:\/\//.test(v)) v = 'https://' + v; return v; }
+$('#btnSetup').addEventListener('click', openSetup);
+$('#closeSetup').addEventListener('click', closeSetup);
+$('#saveSetup').addEventListener('click', async () => {
+  cfg.clientId = $('#clientId').value.trim(); cfg.poll = Number($('#pollSel').value) || 5;
+  const hn = $('#homeName').value.trim();
+  if (!hn) cfg.home = null;
+  else if (!cfg.home || cfg.home.name.toLowerCase() !== hn.toLowerCase()){
+    try{ const s = await resolveSystem(hn); if (s) cfg.home = { id:s.id, name:s.name }; else toast(`Système « ${hn} » introuvable.`, true); }catch(e){ toast(e.message, true); }
+  }
+  saveCfg(); closeSetup(); toast('Réglages enregistrés'); renderExits();
+  if (tok && !demoMode) startTracking();
+});
+$('#btnCreateShare').addEventListener('click', async () => {
+  const db = normDb($('#dbUrl').value);
+  if (!/^https:\/\/[^/]+\.(firebasedatabase\.app|firebaseio\.com)$/.test(db)){ toast('Collez l\'adresse de votre Realtime Database (elle se termine par firebasedatabase.app).', true); return; }
+  cfg.clientId = $('#clientId').value.trim() || cfg.clientId;
+  const room = randomRoom();
+  const local = { nodes:map.nodes, links:map.links };
+  try{
+    const r = await fetch(`${db}/rooms/${room}.json`, { method:'PUT', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(Object.assign({ created:Date.now() }, local)) });
+    if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'La base refuse l\'écriture : collez les règles indiquées dans l\'Aide, puis réessayez.' : 'Firebase a répondu ' + r.status);
+  }catch(e){ toast(e.message || 'Impossible de joindre la base Firebase.', true); return; }
+  cfg.db = db; cfg.room = room; saveCfg();
+  connectShared(); refreshShareUi(); publishPilot(true);
+  toast('Carte partagée créée. Envoyez le lien d\'invitation à vos corpmates.');
+});
+$('#btnLeaveShare').addEventListener('click', () => {
+  const b = $('#btnLeaveShare');
+  if (!b.dataset.confirm){ b.dataset.confirm = '1'; b.textContent = 'Confirmer : revenir à la carte locale'; setTimeout(() => { delete b.dataset.confirm; b.textContent = 'Quitter la carte partagée'; }, 3500); return; }
+  if (tok) remote('DELETE', `pilots/${tok.charId}`);
+  cfg.room = ''; saveCfg(); delete b.dataset.confirm; b.textContent = 'Quitter la carte partagée';
+  map = normalize(store.get(K.map, null)); connectShared(); refreshShareUi(); renderAll();
+});
+$('#btnCopyLink').addEventListener('click', async () => { try{ await navigator.clipboard.writeText($('#shareLink').value); toast('Lien copié'); }catch(e){ $('#shareLink').select(); toast('Sélectionnez le lien et copiez-le avec Ctrl+C.', true); } });
+$('#btnCopyRules').addEventListener('click', async () => { try{ await navigator.clipboard.writeText($('#rulesText').textContent); toast('Règles copiées'); }catch(e){ toast('Sélectionnez le texte et copiez-le avec Ctrl+C.', true); } });
+function handleInvite(){
+  const m = /#rejoindre=([A-Za-z0-9_-]+)/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(null, '', callbackUrl);
+  try{
+    const j = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((m[1].length + 3) % 4)), c => c.charCodeAt(0))));
+    if (!j.db || !j.room) throw 0;
+    cfg.db = j.db; cfg.room = j.room; if (j.cid) cfg.clientId = j.cid; saveCfg();
+    toast('Vous avez rejoint la carte partagée de votre corpo.');
+  }catch(e){ toast('Lien d\'invitation invalide.', true); }
+}
+
+/* Aide */
+$('#btnHelp').addEventListener('click', () => $('#help').classList.add('open'));
+$('#closeHelp').addEventListener('click', () => $('#help').classList.remove('open'));
+document.querySelectorAll('#help [role=tab]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#help [role=tab]').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+  document.querySelectorAll('#help .tabpane').forEach(p => p.hidden = p.id !== b.dataset.tab);
+}));
+document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeSetup(); $('#help').classList.remove('open'); } });
+
+/* =========================================================
+   Démarrage
+   ========================================================= */
+(async () => {
+  handleInvite();
+  await handleCallback();
+  map = normalize(store.get(cacheKey(), null));
+  connectShared();
+  renderAll(); center();
+  loadWhData(); loadActivity();
+  setInterval(() => { loadActivity(); if (!drag) render(); renderPilots(); }, 30000);
+  if (location.protocol === 'file:') toast('Le mode démo fonctionne partout. Pour la connexion EVE, ouvrez la carte depuis son adresse en ligne (voir Aide).', true);
+  if (tok && cfg.clientId) startTracking();
+  else if (!cfg.clientId && location.protocol !== 'file:') openSetup();
+})();
+})();
+</script>
+</body>
+</html>
