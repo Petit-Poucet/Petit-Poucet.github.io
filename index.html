@@ -199,6 +199,12 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
         <dt>Vaisseau</dt><dd id="pShip">–</dd>
         <dt>Suivi</dt><dd id="pTrack">Arrêté</dd>
       </dl>
+      <div id="altsBox" hidden>
+        <h3>Autres personnages</h3>
+        <div id="altsList" class="plist"></div>
+        <div class="row"><button type="button" class="small" id="btnAddAlt">+ Ajouter un personnage</button></div>
+        <p class="note" id="altsNote">Sur la page de CCP, choisissez l'autre personnage. S'il est sur un autre compte EVE, déconnectez-vous d'abord du premier compte sur la page de CCP (« Se déconnecter »).</p>
+      </div>
     </section>
 
     <section class="card" id="pilotsCard" hidden>
@@ -263,7 +269,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
         <button type="submit" class="primary">Autoriser</button>
       </form>
       <div id="aclList"><span class="empty">Chargement…</span></div>
-      <p class="note">Seuls ces personnages peuvent ouvrir votre carte, après s'être connectés avec leur compte EVE. Retirer un joueur lui coupe l'accès immédiatement.</p>
+      <p class="note">Seuls ces personnages peuvent ouvrir votre carte, après s'être connectés avec leur compte EVE. Retirer un joueur lui coupe l'accès immédiatement. « Multi-perso » permet au joueur de faire suivre ses autres personnages en même temps (vous, propriétaire, l'avez toujours).</p>
       <h3>Lien d'installation pour vos joueurs</h3>
       <p class="note">À envoyer une seule fois à chaque joueur autorisé : il configure la carte chez lui. Ce lien ne donne aucun accès à lui seul.</p>
       <input id="cfgLink" class="mono" readonly aria-label="Lien d'installation">
@@ -336,7 +342,10 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
         "pilots": {
           ".read": "auth != null &amp;&amp; ($owner === auth.uid || root.child('maps').child($owner).child('acl').child(auth.uid).exists())",
           "$uid": {
-            ".write": "auth != null &amp;&amp; ($owner === auth.uid || ($uid === auth.uid &amp;&amp; root.child('maps').child($owner).child('acl').child(auth.uid).exists()))"
+            ".write": "auth != null &amp;&amp; ($owner === auth.uid || ($uid === auth.uid &amp;&amp; root.child('maps').child($owner).child('acl').child(auth.uid).exists()))",
+            "alts": {
+              ".validate": "$owner === auth.uid || root.child('maps').child($owner).child('acl').child(auth.uid).child('multi').val() === true"
+            }
           }
         }
       }
@@ -521,7 +530,7 @@ const ESI_ROOT = 'https://esi.evetech.net';
 const SSO = 'https://login.eveonline.com/v2/oauth';
 const SCOPES = 'esi-location.read_location.v1 esi-location.read_online.v1 esi-location.read_ship_type.v1';
 const DATA_URL = 'https://raw.githubusercontent.com/wanderer-industries/wanderer/main/priv/repo/data/';
-const K = { cfg:'whmap.cfg', tok:'whmap.tok', map:'whmap.map', pkce:'whmap.pkce', me:'whmap.me', data:'whmap.data2', fb:'whmap.fb' };
+const K = { cfg:'whmap.cfg', tok:'whmap.tok', map:'whmap.map', pkce:'whmap.pkce', me:'whmap.me', data:'whmap.data2', fb:'whmap.fb', alts:'whmap.alts' };
 const NW = 156, NH = 62;
 const HUBS = [
   { id:30000142, name:'Jita' }, { id:30002187, name:'Amarr' }, { id:30002659, name:'Dodixie' },
@@ -555,6 +564,11 @@ let cfg = Object.assign({ clientId:'', poll:5, home:null, ships:[], cloud:{ work
 if (!cfg.cloud) cfg.cloud = { worker:'', db:'', apiKey:'' };
 let tok = store.get(K.tok, null);
 let me = store.get(K.me, { current:null });
+if (!me.alts) me.alts = {};
+let alts = store.get(K.alts, []);            // personnages supplémentaires : jetons EVE
+const altState = {};                          // état en direct par personnage supplémentaire
+let myMulti = false;                          // droit « multi-personnages » sur la carte affichée
+const saveAlts = () => store.set(K.alts, alts);
 let map = emptyMap();
 let view = { x:0, y:0, k:1 };
 let sel = null;
@@ -684,12 +698,14 @@ async function connectShared(){
   map = normalize(store.get(cacheKey(), null));
   setSync('', 'Connexion au partage…');
   // Rôle sur la carte affichée
+  myMulti = false;
   if (cfg.mapOwner === fb.uid){ myRole = 'owner'; mapOwnerName = fb.name; }
   else {
     try{
       const acl = await fbReq('GET', `maps/${cfg.mapOwner}/acl/${fb.uid}`);
       if (!acl){ throw Object.assign(new Error('x'), { status:403 }); }
       myRole = acl.role === 'edit' ? 'edit' : 'view';
+      myMulti = acl.multi === true;
       mapOwnerName = await fbReq('GET', `maps/${cfg.mapOwner}/ownerName`).catch(() => '') || '';
     }catch(e){
       toast('Vous n\'avez plus accès à cette carte. Retour à votre propre carte.', true);
@@ -734,6 +750,8 @@ async function connectShared(){
   // Pour un invité : suit son propre droit en direct (changement de droit ou retrait)
   if (myRole !== 'owner'){
     open(`acl/${fb.uid}`, (path, data) => {
+      if (path === '/' && data) myMulti = data.multi === true;
+      if (path === '/multi'){ const before = myMulti; myMulti = data === true; if (before !== myMulti){ toast(myMulti ? 'Vous pouvez maintenant suivre plusieurs personnages sur cette carte.' : 'Le suivi de plusieurs personnages a été désactivé pour vous sur cette carte.'); publishPilot(true); renderPilot(); } }
       const role = path === '/' ? (data && data.role) : (path === '/role' ? data : undefined);
       if (path === '/' && !data){ setSync('err', 'Accès retiré'); toast('Le propriétaire de cette carte vous a retiré l\'accès.', true); streams.forEach(x => x.close()); return; }
       if (role !== undefined){ const before = myRole; myRole = role === 'edit' ? 'edit' : 'view'; if (before !== myRole){ toast(myRole === 'edit' ? 'Vous pouvez maintenant modifier cette carte.' : 'Votre accès est passé en lecture seule.'); lastSelKey = ''; } }
@@ -865,14 +883,14 @@ async function loadZkill(id){
    ========================================================= */
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 function jwt(t){ try{ return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }catch(e){ return {}; } }
-async function login(){
+async function login(asAlt){
   if (!cfg.clientId){ openSetup(); toast('Indiquez d\'abord le Client ID de votre application EVE.', true); return; }
   if (location.protocol === 'file:'){ toast('Ouvrez la carte depuis son adresse en ligne (ou http://localhost) pour vous connecter.', true); return; }
   if (!window.crypto || !crypto.subtle){ toast('Ce navigateur bloque la connexion : utilisez une adresse https ou http://localhost.', true); return; }
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
   const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
   const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
-  try{ sessionStorage.setItem(K.pkce, JSON.stringify({ verifier, state })); }catch(e){}
+  try{ sessionStorage.setItem(K.pkce, JSON.stringify({ verifier, state, alt:asAlt === true })); }catch(e){}
   const p = new URLSearchParams({ response_type:'code', redirect_uri:callbackUrl, client_id:cfg.clientId, scope:SCOPES, code_challenge:challenge, code_challenge_method:'S256', state });
   location.href = `${SSO}/authorize/?${p}`;
 }
@@ -881,9 +899,8 @@ async function tokenRequest(params){
   if (!r.ok) throw new Error('Connexion refusée par CCP (' + r.status + ')');
   const j = await r.json();
   const claims = jwt(j.access_token);
-  tok = { access_token:j.access_token, refresh_token:j.refresh_token, exp:(claims.exp || 0) * 1000,
-          charId:Number(String(claims.sub || '').split(':').pop()), charName:claims.name || '' };
-  store.set(K.tok, tok);
+  return { access_token:j.access_token, refresh_token:j.refresh_token, exp:(claims.exp || 0) * 1000,
+           charId:Number(String(claims.sub || '').split(':').pop()), charName:claims.name || '' };
 }
 async function handleCallback(){
   const q = new URLSearchParams(location.search);
@@ -891,14 +908,40 @@ async function handleCallback(){
   let saved = null; try{ saved = JSON.parse(sessionStorage.getItem(K.pkce) || 'null'); }catch(e){}
   history.replaceState(null, '', callbackUrl);
   if (!saved || saved.state !== q.get('state')){ toast('Connexion interrompue, réessayez.', true); return; }
-  try{ await tokenRequest({ grant_type:'authorization_code', code:q.get('code'), client_id:cfg.clientId, code_verifier:saved.verifier }); toast('Connecté : ' + tok.charName); }
+  try{
+    const t = await tokenRequest({ grant_type:'authorization_code', code:q.get('code'), client_id:cfg.clientId, code_verifier:saved.verifier });
+    if (saved.alt && tok){
+      if (t.charId === tok.charId){ toast(`${t.charName} est déjà votre personnage principal. Sur la page de CCP, changez de compte pour choisir l'autre personnage.`, true); return; }
+      alts = alts.filter(a => a.charId !== t.charId).concat([t]); saveAlts();
+      toast('Personnage ajouté : ' + t.charName);
+    } else {
+      tok = t; store.set(K.tok, tok);
+      alts = alts.filter(a => a.charId !== t.charId); saveAlts();
+      toast('Connecté : ' + tok.charName);
+    }
+  }
   catch(e){ toast(e.message, true); }
 }
 async function ensureToken(){
   if (!tok) throw new Error('Non connecté');
   if (Date.now() < tok.exp - 60000) return;
-  await tokenRequest({ grant_type:'refresh_token', refresh_token:tok.refresh_token, client_id:cfg.clientId });
+  tok = await tokenRequest({ grant_type:'refresh_token', refresh_token:tok.refresh_token, client_id:cfg.clientId });
+  store.set(K.tok, tok);
 }
+async function ensureAltToken(a){
+  if (Date.now() < a.exp - 60000) return;
+  Object.assign(a, await tokenRequest({ grant_type:'refresh_token', refresh_token:a.refresh_token, client_id:cfg.clientId }));
+  saveAlts();
+}
+async function esiAs(a, path){
+  await ensureAltToken(a);
+  const r = await fetch(ESI + path, { headers:{ Accept:'application/json', Authorization:'Bearer ' + a.access_token }, cache:'no-store' });
+  if (r.status === 401 || r.status === 403) throw new Error('Connexion refusée par CCP (' + r.status + ')');
+  if (!r.ok) throw new Error('ESI ' + r.status);
+  return r.json();
+}
+/* Droit de suivre plusieurs personnages : toujours en local et pour le propriétaire, sinon accordé dans « Accès » */
+const canMulti = () => !shared() || myRole === 'owner' || myMulti;
 function logout(){
   if (fb && shared()) remote('DELETE', `pilots/${fb.uid}`);
   tok = null; store.del(K.tok); fb = null; store.del(K.fb); cfg.mapOwner = ''; saveCfg();
@@ -931,22 +974,57 @@ async function tick(){
       pilot.ship = sn ? `${sn} (${typeName})` : typeName; pilot.shipType = typeName;
     }
     await arriveAt(loc.solar_system_id);
+    await tickAlts();
     publishPilot();
-    renderPilot();
+    renderPilot(); renderPilots();
   }catch(e){
     if (/Connexion refusée/.test(e.message)){ logout(); toast('Session expirée, reconnectez-vous.', true); }
     else toast(e.message, true);
   }
+}
+async function tickAlts(){
+  if (!alts.length || !canMulti()) return;
+  const now = Date.now();
+  for (const a of alts.slice()){
+    const st = altState[a.charId] = altState[a.charId] || { current:me.alts[a.charId] ?? null, online:false, ship:'', shipType:'', lastOnline:0, lastShip:0 };
+    try{
+      if (now - st.lastOnline > 60000){ st.lastOnline = now; st.online = !!(await esiAs(a, `/characters/${a.charId}/online/`)).online; }
+      const loc = await esiAs(a, `/characters/${a.charId}/location/`);
+      if (now - st.lastShip > 15000){
+        st.lastShip = now;
+        const sh = await esiAs(a, `/characters/${a.charId}/ship/`);
+        let typeName = ''; try{ typeName = (await esi(`/universe/types/${sh.ship_type_id}/`)).name; }catch(e){}
+        let sn = String(sh.ship_name || '').trim(); if (/^u['"]|\\x[0-9a-f]{2}/i.test(sn)) sn = '';
+        st.ship = sn ? `${sn} (${typeName})` : typeName; st.shipType = typeName;
+      }
+      const id = loc.solar_system_id;
+      if (id != null && st.current != id){
+        const prev = st.current;
+        await moveChar(prev, id, null, a.charName);
+        st.current = id; me.alts[a.charId] = id; saveMe();
+      }
+    }catch(e){
+      if (/Connexion refusée/.test(e.message)){ alts = alts.filter(x => x.charId !== a.charId); saveAlts(); toast(`Session de ${a.charName} expirée : rajoutez ce personnage.`, true); }
+    }
+  }
+}
+function myAltsInfo(){
+  return alts.map(a => { const st = altState[a.charId] || {}; const cur = st.current ?? me.alts[a.charId] ?? null;
+    return { charId:a.charId, name:a.charName, sys:cur, ship:st.shipType || '', shipFull:st.ship || '', online:!!st.online }; });
 }
 let lastPilotPub = 0;
 function publishPilot(force){
   if (!tok || !fb || !shared()) return;
   const now = Date.now();
   const p = map.pilots[fb.uid];
-  const changed = !p || p.sys != me.current || p.ship !== pilot.shipType || p.online !== pilot.online;
+  const altsObj = {};
+  if (canMulti()) for (const a of myAltsInfo()) altsObj[a.charId] = { name:a.name, sys:a.sys != null && map.nodes[a.sys] ? a.sys : null, ship:a.ship, online:a.online };
+  const changed = !p || p.sys != me.current || p.ship !== pilot.shipType || p.online !== pilot.online || JSON.stringify(p.alts || {}) !== JSON.stringify(altsObj);
   if (!force && !changed && now - lastPilotPub < 60000) return;
   lastPilotPub = now;
-  put(`pilots/${fb.uid}`, { name:tok.charName, sys:me.current != null && map.nodes[me.current] ? me.current : null, ship:pilot.shipType || '', online:pilot.online, t:now });
+  const rec = { name:tok.charName, sys:me.current != null && map.nodes[me.current] ? me.current : null, ship:pilot.shipType || '', online:pilot.online, t:now };
+  if (Object.keys(altsObj).length) rec.alts = altsObj;
+  put(`pilots/${fb.uid}`, rec);
 }
 
 async function ensureNode(id, nearId, info){
@@ -979,16 +1057,19 @@ function addLink(a, b, gate){
 }
 async function arriveAt(id, info){
   if (id == null || me.current == id) return;
-  if (!canEdit()){ me.current = id; saveMe(); return; }
   const prev = me.current;
-  await ensureNode(id, map.nodes[prev] ? prev : null, info);
-  if (prev != null && map.nodes[prev] && !linkBetween(prev, id)){
+  await moveChar(prev, id, info, tok ? tok.charName : (demoMode ? 'Démo' : ''));
+  me.current = id; saveMe();
+}
+/* Ajoute le système, la connexion depuis le système précédent et une ligne de journal (si le droit de modifier le permet) */
+async function moveChar(prev, id, info, who){
+  if (!canEdit()) return;
+  await ensureNode(id, map.nodes[prev] ? prev : (map.nodes[me.current] ? me.current : null), info);
+  if (prev != null && map.nodes[prev] && prev != id && !linkBetween(prev, id)){
     const gate = info ? !!info.gate : await gateConnected(prev, id);
     addLink(prev, id, gate);
   }
-  me.current = id; saveMe();
   const from = prev != null && map.nodes[prev] ? map.nodes[prev].name : '–';
-  const who = tok ? tok.charName : (demoMode ? 'Démo' : '');
   put(`log/${Date.now().toString(36)}${Math.random().toString(36).slice(2,5)}`, { t:Date.now(), who, from, to:map.nodes[id].name });
   trimLog();
 }
@@ -1090,9 +1171,16 @@ function activePilots(){
     const p = map.pilots[id]; if (!p) continue;
     if (fb && String(id) === String(fb.uid)) continue;
     if (now - (p.t || 0) > 15 * 60000 && !demoMode) continue;
-    out.push(Object.assign({ id }, p));
+    out.push(Object.assign({ id }, p, { alts:undefined }));
+    if (p.alts) for (const k in p.alts){ const a = p.alts[k]; if (a) out.push({ id:id + '-' + k, name:a.name, sys:a.sys, ship:a.ship, online:!!a.online, t:p.t, altOf:p.name }); }
   }
   return out;
+}
+function mineAt(sysId){
+  const names = [];
+  if (me.current != null && String(me.current) === String(sysId)) names.push(tok ? tok.charName : 'Vous');
+  if (canMulti()) for (const a of myAltsInfo()) if (a.sys != null && String(a.sys) === String(sysId)) names.push(a.name);
+  return names;
 }
 function renderAll(){ render(); renderLog(); renderPilot(); renderPilots(); renderExits(); }
 function render(){
@@ -1130,7 +1218,7 @@ function render(){
   for (const id in map.nodes){
     const n = map.nodes[id]; if (!n) continue;
     const c = CLASS[n.cls] || CLASS['?'];
-    const here = me.current == n.id;
+    const mine = mineAt(n.id), here = mine.length > 0;
     const g = el('g', { class:'node' + (here ? ' here' : '') + (sel && sel.kind === 'node' && sel.id == n.id ? ' sel' : ''), transform:`translate(${n.x} ${n.y})`, tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, gn);
     if (here) el('rect', { x:-4, y:-4, width:NW + 8, height:NH + 8, rx:7, class:'halo' }, g);
     el('rect', { width:NW, height:NH, rx:4, class:'box' }, g);
@@ -1149,7 +1237,7 @@ function render(){
     if (ws && ws.eff){ const e = el('text', { x:NW - 10, y:54, 'text-anchor':'end', class:'eff' }, g); e.textContent = ws.eff.replace(' Star', '').replace('Cataclysmic Variable', 'Cataclysmic'); }
     else if (k && (k.ship_kills || k.pod_kills)){ const e = el('text', { x:NW - 10, y:54, 'text-anchor':'end', class:'act' }, g); e.textContent = `☠ ${k.ship_kills + k.pod_kills}/h`; }
     let labelY = -10;
-    if (here){ const w = el('text', { x:NW/2, y:labelY, 'text-anchor':'middle', class:'who' }, g); w.textContent = '▼ ' + (tok ? tok.charName : 'Vous'); labelY -= 14; }
+    if (here){ const w = el('text', { x:NW/2, y:labelY, 'text-anchor':'middle', class:'who' }, g); w.textContent = '▼ ' + mine.join(', '); labelY -= 14; }
     if (pilotsBySys[n.id]){ const w = el('text', { x:NW/2, y:labelY, 'text-anchor':'middle', class:'who other' }, g); w.textContent = pilotsBySys[n.id].join(', '); }
     g.addEventListener('pointerdown', ev => startDrag(ev, n));
     g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); select('node', n.id); } });
@@ -1289,7 +1377,8 @@ function renderVolume(){
     const rad = Math.max(6, 15 * p.s);
     const g = el('g', { class:'vnode', tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, scene);
     g.dataset.node = it.id;
-    if (String(me.current) === String(it.id)) el('circle', { cx:p.x, cy:p.y, r:rad + 5, class:'halo' }, g);
+    const mineV = mineAt(it.id);
+    if (mineV.length) el('circle', { cx:p.x, cy:p.y, r:rad + 5, class:'halo' }, g);
     el('circle', { cx:p.x, cy:p.y, r:rad, fill:`url(#vg-${(n.cls in CLASS ? n.cls : '?').replace('?', 'U')})` }, g);
     if (sel && sel.kind === 'node' && String(sel.id) === String(it.id)) el('circle', { cx:p.x, cy:p.y, r:rad + 3, class:'vsel' }, g);
     const fs = Math.max(10, Math.min(20, 14 * p.s));
@@ -1298,7 +1387,7 @@ function renderVolume(){
     const sub = [c.label]; if (ws && ws.st && ws.st.length) sub.push(ws.st.join(' ')); if (ws && ws.eff) sub.push(ws.eff.replace(' Star', ''));
     const t2 = el('text', { x:p.x, y:p.y + rad + fs * 2 + 2, 'text-anchor':'middle', class:'vcls', 'font-size':Math.max(9, fs * 0.62), fill:c.color }, g); t2.textContent = sub.join(' · ');
     const who = [];
-    if (String(me.current) === String(it.id)) who.push('▼ ' + (tok ? tok.charName : 'Vous'));
+    if (mineV.length) who.push('▼ ' + mineV.join(', '));
     if (pilotsBySys[it.id]) who.push(pilotsBySys[it.id].join(', '));
     if (who.length){ const w = el('text', { x:p.x, y:p.y - rad - 8, 'text-anchor':'middle', class:'who' + (who.length === 1 && !String(me.current).length ? ' other' : ''), 'font-size':11 }, g); w.textContent = who.join(' · '); }
     g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); select('node', it.id); } });
@@ -1598,11 +1687,32 @@ function renderPilot(){
   const cur = map.nodes[me.current];
   $('#pSys').innerHTML = cur ? `<b>${esc(cur.name)}</b> <span class="dim">${esc((CLASS[cur.cls] || CLASS['?']).label)}</span>` : '–';
   $('#pShip').textContent = pilot.ship || '–';
+  // Autres personnages
+  const box = $('#altsBox');
+  box.hidden = !tok || demoMode;
+  if (box.hidden) return;
+  const allowed = canMulti();
+  $('#btnAddAlt').hidden = !allowed;
+  $('#altsNote').textContent = allowed
+    ? 'Sur la page de CCP, choisissez l\'autre personnage. S\'il est sur un autre compte EVE, déconnectez-vous d\'abord du premier compte sur la page de CCP (« Se déconnecter »).'
+    : 'Le propriétaire de cette carte ne vous a pas autorisé à suivre plusieurs personnages.';
+  const list = myAltsInfo();
+  $('#altsList').innerHTML = list.length ? list.map(a => { const n = map.nodes[a.sys]; return `<div class="prow${allowed && a.online ? '' : ' off'}">
+      <span class="dot ${allowed && a.online ? 'on' : ''}"></span><b>${esc(a.name)}</b>
+      <button type="button" class="small" data-rmalt="${a.charId}" title="Ne plus suivre ce personnage">Retirer</button>
+      <span class="ship">${allowed ? (n ? esc(n.name) : 'position inconnue') + (a.shipFull ? ' · ' + esc(a.shipFull) : '') : 'suivi désactivé sur cette carte'}</span></div>`; }).join('')
+    : '<span class="empty">Aucun pour l\'instant.</span>';
+  $('#altsList').querySelectorAll('[data-rmalt]').forEach(b => b.addEventListener('click', () => {
+    const id = Number(b.dataset.rmalt);
+    alts = alts.filter(a => a.charId !== id); saveAlts(); delete altState[id]; delete me.alts[id]; saveMe();
+    publishPilot(true); renderAll();
+  }));
 }
 function renderPilots(){
   // Vous en premier, puis les autres pilotes : connectés d'abord, puis par nom
   const list = [];
   if (tok || demoMode) list.push({ id:'me', name:(tok ? tok.charName : 'Pilote de démo') + ' (vous)', sys:me.current, ship:pilot.shipType || pilot.ship, online:pilot.online, self:true });
+  if (tok && canMulti()) for (const a of myAltsInfo()) list.push({ id:'alt' + a.charId, name:a.name + ' (vous)', sys:a.sys, ship:a.ship, online:a.online, self:true });
   activePilots().sort((a, b) => (b.online - a.online) || String(a.name).localeCompare(String(b.name))).forEach(p => list.push(p));
   const others = list.filter(p => !p.self).length;
   $('#pilotsCard').hidden = !(shared() || demoMode || others);
@@ -1708,6 +1818,7 @@ $('#fileImport').addEventListener('change', async e => {
   e.target.value = '';
 });
 $('#btnLogin').addEventListener('click', () => tok ? logout() : login());
+$('#btnAddAlt').addEventListener('click', () => login(true));
 
 /* =========================================================
    Réglages et partage
@@ -1787,12 +1898,17 @@ async function loadAcl(){
     const acl = await fbReq('GET', `maps/${fb.uid}/acl`) || {};
     const ids = Object.keys(acl).sort((a, b) => String(acl[a].name).localeCompare(String(acl[b].name)));
     if (!ids.length){ box.innerHTML = '<span class="empty">Personne d\'autre n\'a accès à votre carte pour l\'instant.</span>'; return; }
-    box.innerHTML = `<table><thead><tr><th>Personnage</th><th>Droit</th><th></th></tr></thead><tbody>${ids.map(u => `
+    box.innerHTML = `<table><thead><tr><th>Personnage</th><th>Droit</th><th title="Peut suivre plusieurs de ses personnages en même temps">Multi-perso</th><th></th></tr></thead><tbody>${ids.map(u => `
       <tr><td><b>${esc(acl[u].name)}</b></td>
       <td><select data-role="${esc(u)}" aria-label="Droit de ${esc(acl[u].name)}"><option value="edit"${acl[u].role === 'edit' ? ' selected' : ''}>Peut modifier</option><option value="view"${acl[u].role !== 'edit' ? ' selected' : ''}>Lecture seule</option></select></td>
+      <td><input type="checkbox" data-multi="${esc(u)}" aria-label="${esc(acl[u].name)} peut suivre plusieurs personnages"${acl[u].multi === true ? ' checked' : ''}></td>
       <td class="r"><button type="button" class="small danger" data-del="${esc(u)}">Retirer</button></td></tr>`).join('')}</tbody></table>`;
     box.querySelectorAll('[data-role]').forEach(x => x.addEventListener('change', async () => {
       try{ await fbReq('PUT', `maps/${fb.uid}/acl/${x.dataset.role}/role`, x.value); toast('Droit modifié'); }catch(e){ toast('Modification refusée par la base.', true); }
+    }));
+    box.querySelectorAll('[data-multi]').forEach(x => x.addEventListener('change', async () => {
+      try{ await fbReq('PUT', `maps/${fb.uid}/acl/${x.dataset.multi}/multi`, x.checked ? true : null); toast(x.checked ? 'Multi-personnages autorisé' : 'Multi-personnages retiré'); }
+      catch(e){ x.checked = !x.checked; toast('Modification refusée par la base.', true); }
     }));
     box.querySelectorAll('[data-del]').forEach(x => x.addEventListener('click', async () => {
       const u = x.dataset.del;
