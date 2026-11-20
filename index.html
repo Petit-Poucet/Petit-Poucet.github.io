@@ -249,7 +249,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v4.0</span>
+  <span class="ver" id="appVersion" title="Map version">v4.1</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -664,7 +664,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '4.0';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '4.1';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -923,6 +923,9 @@ async function connectShared(){
   open('pilots', (path, data) => {
     if (path === '/') map.pilots = data || {};
     else setAt(map.pilots, path.slice(1).split('/'), data);
+    // our own record comes back stamped by the server: measure the gap between server time and this PC's clock
+    const mineRec = map.pilots[fb.uid];
+    if (mineRec && typeof mineRec.t === 'number' && (path === '/' || path.startsWith('/' + fb.uid))){ const off = mineRec.t - Date.now(); if (Math.abs(off) < 24 * 3600e3 && Math.abs(Date.now() - lastPilotPub) < 20000) srvOffset = off; }
   });
   // Pour un invité : suit son propre droit en direct (changement de droit ou retrait)
   if (myRole !== 'owner'){
@@ -1798,8 +1801,13 @@ function publishPilot(force){
   lastPilotPub = now;
   const rec = { name:tok.charName, sys:me.current != null && map.nodes[me.current] ? me.current : null, ship:pilot.shipType || '', online:pilot.online, t:now };
   if (Object.keys(altsObj).length) rec.alts = altsObj;
-  put(`pilots/${fb.uid}`, rec);
+  // timestamp written by the Firebase server, not by this PC: a PC clock that is a few minutes off no longer makes a pilot look offline
+  setAt(map, ['pilots', fb.uid], JSON.parse(JSON.stringify(rec)));
+  remote('PUT', `pilots/${fb.uid}`, { ...rec, t:{ '.sv':'timestamp' } });
+  scheduleRender();
 }
+let srvOffset = 0;   // Firebase server time minus this PC's time
+const srvNow = () => Date.now() + srvOffset;
 
 async function ensureNode(id, nearId, info){
   if (map.nodes[id]) return map.nodes[id];
@@ -2010,7 +2018,7 @@ const svgNS = 'http://www.w3.org/2000/svg';
 function el(tag, attrs, parent){ const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
 function applyView(){ $('#vp').setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`); }
 function activePilots(){
-  const now = Date.now(), out = [];
+  const now = srvNow(), out = [];
   // Vos propres personnages (principal + suivis) ne doivent apparaître qu'une fois : dans votre liste
   const mine = new Set([tok && tok.charId, ...(canMulti() ? alts.map(a => a.charId) : [])].filter(Boolean).map(String));
   const seen = new Set(mine);
@@ -2024,8 +2032,9 @@ function activePilots(){
     const age = now - (p.t || 0);
     if (age > 24 * 3600e3 && !demoMode) continue;             // au-delà de 24 h on n'affiche plus
     const fresh = demoMode || age < 3 * 60000;                // onglet fermé depuis plus de 3 min = déconnecté
-    out.push(Object.assign({ id }, p, { alts:undefined, live:!!p.online && fresh }));
-    if (p.alts) for (const k in p.alts){ const a = p.alts[k]; if (!a || seen.has(String(k))) continue; seen.add(String(k)); if (a) out.push({ id:id + '-' + k, name:a.name, sys:a.sys, ship:a.ship, online:!!a.online, live:!!a.online && fresh, t:p.t, altOf:p.name }); }
+    const why = (online) => online && fresh ? '' : !online ? 'Character not in game (EVE client offline)' : `Map not updated for ${fmtDur(age / 60000)} (tab closed, PC asleep, or old map version)`;
+    out.push(Object.assign({ id }, p, { alts:undefined, live:!!p.online && fresh, why:why(!!p.online) }));
+    if (p.alts) for (const k in p.alts){ const a = p.alts[k]; if (!a || seen.has(String(k))) continue; seen.add(String(k)); if (a) out.push({ id:id + '-' + k, name:a.name, sys:a.sys, ship:a.ship, online:!!a.online, live:!!a.online && fresh, t:p.t, altOf:p.name, why:why(!!a.online) }); }
   }
   return out;
 }
@@ -2817,8 +2826,8 @@ function renderPilots(){
   const row = (p, full) => {
     const n = p.sys != null ? map.nodes[p.sys] : null;
     return `<div class="prow">
-      <span class="dot ${p.live ? 'on' : 'dead'}" title="${p.live ? 'In game' : 'Offline'}"></span>
-      <button type="button" class="plink ${p.live ? 'live' : 'dead'}" data-sys="${n ? esc(p.sys) : ''}" ${n ? '' : 'disabled'} title="${n ? 'Center the map on ' + esc(n.name) : 'Not on the map'}">${esc(p.name)}</button>
+      <span class="dot ${p.live ? 'on' : 'dead'}" title="${p.live ? 'In game' : esc(p.why || (p.self ? 'Character not in game (EVE client offline)' : 'Offline'))}"></span>
+      <button type="button" class="plink ${p.live ? 'live' : 'dead'}" data-sys="${n ? esc(p.sys) : ''}" ${n ? '' : 'disabled'} title="${(p.live ? '' : esc(p.why || (p.self ? 'Character not in game (EVE client offline)' : 'Offline')) + ' · ') + (n ? 'Center the map on ' + esc(n.name) : 'Not on the map')}">${esc(p.name)}</button>
       <span class="where">${n ? esc(n.name) : 'off map'}</span>
       ${full && p.ship ? `<span class="ship">${esc(p.ship)}</span>` : ''}
     </div>`;
