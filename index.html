@@ -227,7 +227,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v2.4</span>
+  <span class="ver" id="appVersion" title="Map version">v2.5</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -642,7 +642,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '2.4';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '2.5';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -1120,12 +1120,34 @@ function hubComponent(hubId){
   return seen;
 }
 const isHubId = id => HUB_IDS.includes(Number(id));
+function hubState(hubId){
+  const comp = hubComponent(hubId);
+  // "In the chain" = linked to where you actually are: your characters, live pilots, Home, ENTER or EXIT.
+  // A leftover system from an old trip that happens to touch a hub does not count.
+  const anchors = new Set();
+  if (me.current != null) anchors.add(String(me.current));
+  for (const p of activePilots()) if (p.live && p.sys != null) anchors.add(String(p.sys));
+  if (cfg.home) anchors.add(String(cfg.home.id));
+  for (const k of ['enter', 'exit']) if (map[k]) anchors.add(String(map[k].id));
+  const inChain = [...anchors].some(id => comp.has(id) && map.nodes[id] && (!isHubId(id) || String(id) === String(hubId)));
+  let gateway = null;
+  if (inChain){
+    const adj = {};
+    for (const l of linksArr()){ const a = String(l.a), b = String(l.b); (adj[a] = adj[a] || []).push(b); (adj[b] = adj[b] || []).push(a); }
+    const seen = new Set([String(hubId)]), q = [String(hubId)];
+    while (q.length && !gateway){ const x = q.shift(); for (const y of adj[x] || []) if (!seen.has(y)){ seen.add(y); const n = map.nodes[y]; if (n && !n.scout && !isHubId(y)){ gateway = n; break; } q.push(y); } }
+    if (!gateway){ const own = [...anchors].find(id => comp.has(id) && map.nodes[id] && !isHubId(id)); if (own) gateway = map.nodes[own]; }
+  }
+  return { comp, inChain:!!gateway, gateway };
+}
 function placeHub(hubId){
   const h = map.nodes[hubId]; if (!h || !canEdit()) return false;
-  const comp = hubComponent(hubId);
-  const chainIn = [...comp].map(id => map.nodes[id]).filter(n => n && !n.scout && !isHubId(n.id));
-  if (me.current != null && comp.has(String(me.current)) && map.nodes[me.current] && !isHubId(me.current) && !chainIn.includes(map.nodes[me.current])) chainIn.push(map.nodes[me.current]);
-  const main = Object.values(map.nodes).filter(n => n && !n.scout && !isHubId(n.id) && !comp.has(String(n.id)));
+  const st = hubState(hubId), comp = st.comp;
+  const chainIn = st.gateway ? [st.gateway] : [];
+  // main map = ordinary systems, minus everything hanging off a hub that is not in the chain
+  const apart = new Set();
+  for (const o of HUB_IDS) if (map.nodes[o]){ const so = o === Number(hubId) ? st : hubState(o); if (!so.inChain) so.comp.forEach(x => apart.add(x)); }
+  const main = Object.values(map.nodes).filter(n => n && !n.scout && !isHubId(n.id) && !apart.has(String(n.id)) && !comp.has(String(n.id)));
   const own = linksArr().filter(l => l.a == hubId || l.b == hubId).length;
   const r = Math.max(470, (own > 14 ? own / 2 : own) * (NW + 60) / (2 * Math.PI)) * 1.35 + (own > 14 ? 290 : 0);
   let x, y, place;
