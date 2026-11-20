@@ -101,14 +101,24 @@ svg#vol.panning{cursor:grabbing}
 .exitbtn{border-color:#24533a;color:var(--ok);font-weight:600}
 .exitbtn:hover{border-color:var(--ok)}
 .exitbtn.set{background:#123222}
-.exitbtn.enter{border-color:#2a4673;color:#7fb2ff}
-.exitbtn.enter:hover{border-color:#7fb2ff}
-.exitbtn.enter.set{background:#142844}
+.exitbtn.enter{border-color:#6b5420;color:#f5c542}
+.exitbtn.enter:hover{border-color:#f5c542}
+.exitbtn.enter.set{background:#2e240b}
 #btnExit,#btnEnter{border-top-right-radius:0;border-bottom-right-radius:0}
 #btnExitSet,#btnEnterSet{border-left:0;border-top-left-radius:0;border-bottom-left-radius:0;padding:6px 8px}
 .exittag rect{fill:var(--ok)}
-.exittag.enter rect{fill:#7fb2ff}
-.exittag text{font-family:var(--mono);font-size:10px;font-weight:700;fill:#06210f}
+.exittag.enter rect{fill:#f5c542}
+.exittag text{font-family:var(--mono);font-size:11px;font-weight:800;fill:#06210f}
+.exittag.enter text{fill:#2b1d00}
+/* ENTER / EXIT badges: bigger, glowing, slowly growing and shrinking */
+.mkpulse{transform-box:fill-box;transform-origin:center;animation:mkpulse 1.8s ease-in-out infinite;pointer-events:none}
+.mkpulse.enter{filter:drop-shadow(0 0 5px rgba(245,197,66,.85))}
+.mkpulse.exit{filter:drop-shadow(0 0 5px rgba(76,201,122,.75))}
+.vmark{font-family:var(--mono);font-weight:800;letter-spacing:.1em;paint-order:stroke;stroke:#05080f;stroke-width:3px}
+.vmark.enter{fill:#f5c542}
+.vmark.exit{fill:var(--ok)}
+@keyframes mkpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
+@media (prefers-reduced-motion:reduce){.mkpulse{animation:none}}
 .hubbtn:hover{border-color:var(--drift)}
 .htable{width:100%;border-collapse:collapse;font-size:12px}
 .htable td,.htable th{padding:5px 4px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -227,7 +237,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v2.5</span>
+  <span class="ver" id="appVersion" title="Map version">v2.8</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -249,8 +259,6 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
   <button id="btnDemo" type="button">Demo mode</button>
   <button id="btnView" type="button" aria-pressed="false">Vue volume</button>
   <button id="btnCenter" type="button">Recenter</button>
-  <button id="btnExport" type="button">Export</button>
-  <button id="btnImport" type="button">Import</button>
   <input id="fileImport" type="file" accept=".json,application/json" hidden>
   <button id="btnClear" type="button" class="danger">Clear map</button>
   <button id="btnHelp" type="button">Help</button>
@@ -642,7 +650,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '2.5';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '2.8';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -1913,7 +1921,7 @@ function render(){
     el('rect', { width:5, height:NH, rx:2, fill:c.color }, g);
     const nm = el('text', { x:14, y:22, class:'nm' }, g); nm.textContent = n.name;
     const cl = el('text', { x:NW - 10, y:19, 'text-anchor':'end', class:'cls', fill:c.color }, g); cl.textContent = c.label;
-    { let tx = NW - 4; for (const kind of ['exit', 'enter']) if (isMark(kind, n.id)){ const w = kind === 'enter' ? 46 : 40; tx -= w + 4; const tg = el('g', { class:'exittag ' + kind, transform:`translate(${tx} ${NH - 4})` }, g); el('rect', { width:w, height:15, rx:3 }, tg); const tt = el('text', { x:w / 2, y:11, 'text-anchor':'middle' }, tg); tt.textContent = MARKS[kind].label; } }
+    { let tx = NW - 4; for (const kind of ['exit', 'enter']) if (isMark(kind, n.id)){ const w = kind === 'enter' ? 54 : 46; tx -= w + 14; const tp = el('g', { transform:`translate(${tx} ${NH - 6})` }, g); const tg = el('g', { class:'exittag mkpulse ' + kind }, tp); el('rect', { width:w, height:18, rx:4 }, tg); const tt = el('text', { x:w / 2, y:13, 'text-anchor':'middle' }, tg); tt.textContent = MARKS[kind].label; } }
     const ws = whData.systems[n.id];
     const sub = el('text', { x:14, y:39, class:'sub' }, g);
     if (HUB_IDS.includes(Number(n.id))) sub.textContent = `${hubConns(Number(n.id)).length} connections`;
@@ -1989,15 +1997,21 @@ function volLayout(){
     const maxD = Math.max(...Object.values(depth));
     comps.push({ root, pos, maxD });
   }
+  // Thera / Turnur groups that your chain has not reached are set well apart, after the main chain
+  const hubOut = {};
+  for (const h of HUB_IDS) if (map.nodes[h]) hubOut[h] = !hubState(h).inChain;
+  comps.forEach(c => { c.apart = HUB_IDS.some(h => hubOut[h] && c.pos[String(h)]); });
+  comps.sort((a, b) => (a.apart ? 1 : 0) - (b.apart ? 1 : 0));
   let offset = 0; const all = {};
   comps.forEach((c, i) => {
     c.rad = Math.max(1, c.maxD) * VR;
-    if (i > 0) offset += comps[i - 1].rad + c.rad + VR * 0.6;
+    if (i > 0) offset += comps[i - 1].rad + c.rad + VR * (c.apart && !comps[i - 1].apart ? 6 : 0.6);
     c.cx = offset;
     for (const id in c.pos){ const p = c.pos[id]; all[id] = { x:p.x + offset, y:p.y, z:p.z, d:p.d }; }
   });
-  const last = comps[comps.length - 1];
-  const shift = comps.length ? ((comps[0].cx - comps[0].rad) + (last.cx + last.rad)) / 2 : 0;
+  const mainC = comps.filter(c => !c.apart).length ? comps.filter(c => !c.apart) : comps;
+  const last = mainC[mainC.length - 1];
+  const shift = comps.length ? ((mainC[0].cx - mainC[0].rad) + (last.cx + last.rad)) / 2 : 0;
   for (const id in all) all[id].x -= shift;
   comps.forEach(c => c.cx -= shift);
   return { pos:all, comps };
@@ -2037,8 +2051,8 @@ function renderVolume(){
   }
   // Cadrage automatique : toute la carte tient dans la vue
   let ext = VR;
-  for (const c of comps) ext = Math.max(ext, Math.abs(c.cx) + c.rad);
-  for (const id of ids){ const q = pos[id]; ext = Math.max(ext, Math.hypot(q.x, q.z) + q.y * 0.5); }
+  const fitC = comps.some(c => !c.apart) ? comps.filter(c => !c.apart) : comps;
+  for (const c of fitC){ ext = Math.max(ext, Math.abs(c.cx) + c.rad); for (const id in c.pos){ const q = pos[id]; ext = Math.max(ext, Math.hypot(q.x, q.z) + q.y * 0.5); } }
   const box = $('#vol').getBoundingClientRect();
   vfit = Math.min(1.6, Math.min(box.width * 0.47, box.height * 0.55) / ext);
   // Rotation centre = selected system (no jump: the view is shifted so the new pivot stays where it is on screen)
@@ -2111,9 +2125,9 @@ function renderVolume(){
     const t = el('text', { x:p.x, y:p.y + rad + fs + 2, 'text-anchor':'middle', class:'vname', 'font-size':fs }, g); t.textContent = n.name;
     const ws = whData.systems[n.id];
     const sub = [c.label]; if (ws && ws.st && ws.st.length) sub.push(ws.st.join(' ')); if (ws && ws.eff) sub.push(ws.eff.replace(' Star', ''));
-    if (isMark('exit', it.id)) sub.unshift('EXIT');
-    if (isMark('enter', it.id)) sub.unshift('ENTER');
     const t2 = el('text', { x:p.x, y:p.y + rad + fs * 2 + 2, 'text-anchor':'middle', class:'vcls', 'font-size':Math.max(9, fs * 0.62), fill:c.color }, g); t2.textContent = sub.join(' · ');
+    { const marks = ['enter', 'exit'].filter(k => isMark(k, it.id)); const mfs = Math.max(13, fs * 1.05);
+      marks.forEach((k, mi) => { const mt = el('text', { x:p.x, y:p.y + rad + fs * 2 + 4 + mfs * (1.25 + mi * 1.25), 'text-anchor':'middle', class:'vmark mkpulse ' + k, 'font-size':mfs }, g); mt.textContent = MARKS[k].label; }); }
     if (mineV.length || pilotsBySys[it.id]){
       const w = el('text', { x:p.x, y:p.y - rad - 8, 'text-anchor':'middle', class:'who', 'font-size':11 }, g);
       if (mineV.length) whoSpans(w, mineV, '▼ ');
@@ -2680,14 +2694,14 @@ $('#btnClear').addEventListener('click', () => {
   b.textContent = shared() ? 'Clear for the whole corp?' : 'Confirm?'; b.dataset.confirm = '1';
   setTimeout(() => { b.textContent = 'Clear map'; delete b.dataset.confirm; }, 3500);
 });
-$('#btnExport').addEventListener('click', () => {
+if ($('#btnExport')) $('#btnExport').addEventListener('click', () => {
   const data = { nodes:map.nodes, links:map.links };
   const blob = new Blob([JSON.stringify(data, null, 1)], { type:'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = 'wh-map-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json'; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 });
-$('#btnImport').addEventListener('click', () => $('#fileImport').click());
+if ($('#btnImport')) $('#btnImport').addEventListener('click', () => $('#fileImport').click());
 $('#fileImport').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   try{
