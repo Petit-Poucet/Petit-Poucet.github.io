@@ -85,6 +85,10 @@ svg#vol.panning{cursor:grabbing}
 }
 @keyframes killslow{0%,100%{opacity:.08}50%{opacity:.7}}
 @keyframes killfast{0%,100%{opacity:.25;stroke-width:6}50%{opacity:1;stroke-width:13}}
+#lockMsg{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:rgba(5,8,15,.92)}
+#lockMsg .lbox{max-width:440px;text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:22px 26px}
+#lockMsg .lbox h3{margin:0 0 8px;color:var(--accent);font-size:18px}
+#lockMsg a.btn{display:inline-block;border:1px solid var(--line);border-radius:3px;padding:6px 12px;color:var(--text);text-decoration:none}
 #assetAlert{position:absolute;right:12px;top:12px;z-index:7;width:min(380px,calc(100% - 24px));background:var(--panel);border:1px solid #c9a227;border-radius:6px;box-shadow:0 0 0 1px #000,0 6px 30px rgba(245,197,66,.18);padding:10px 12px;font-size:12.5px}
 #assetAlert h4{margin:0 0 6px;color:#f5c542;font-size:13px;display:flex;align-items:center;gap:8px}
 #assetAlert h4 .x{margin-left:auto}
@@ -249,7 +253,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v5.1</span>
+  <span class="ver" id="appVersion" title="Map version">v5.2</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -281,6 +285,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 
 <div class="layout">
   <div id="mapwrap">
+    <div id="lockMsg" hidden><div class="lbox"><h3>🔒 Private map</h3><p id="lockText"></p><div class="row" style="justify-content:center"><button type="button" class="primary" id="lockLogin">EVE login</button><a class="btn" href="?demo">Watch the demo</a></div></div></div>
     <svg id="map" aria-label="Systems map">
       <g id="vp"><g id="links"></g><g id="nodes"></g><g id="labels"></g></g>
     </svg>
@@ -370,19 +375,34 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <div class="modal" id="setup" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
   <div class="mbox">
     <h2 id="setupTitle">Settings</h2>
+    <p class="note" id="lockNote" hidden>🔒 This site is locked to its owner's map: the EVE application and the database cannot be changed here.</p>
+    <div id="setupTech">
     <h3>1. EVE login</h3>
     <p class="note">Callback URL to declare in your application on developers.eveonline.com:</p>
     <code id="cbUrl"></code>
     <label class="f">EVE application Client ID<input id="clientId" class="mono" spellcheck="false" placeholder="e.g. 3f2a…"></label>
+    </div>
     <label class="f">Location refresh
       <select id="pollSel"><option value="5">Every 5 seconds</option><option value="10">Every 10 seconds</option><option value="20">Every 20 seconds</option></select>
     </label>
+    <div id="setupTech2">
     <h3>2. Secure sharing (optional)</h3>
     <p class="note" id="shareState">Local map: only visible in this browser.</p>
     <label class="f">Access server URL (Cloudflare Worker)<input id="cWorker" class="mono" spellcheck="false" placeholder="https://petit-poucet.YOUR-NAME.workers.dev"></label>
     <label class="f">Firebase database URL (Realtime Database)<input id="cDb" class="mono" spellcheck="false" placeholder="https://my-project-default-rtdb.europe-west1.firebasedatabase.app"></label>
     <label class="f">Firebase Web API key<input id="cKey" class="mono" spellcheck="false" placeholder="AIza…"></label>
     <p class="note">These three values are not secret: protection comes from CCP identity checks and the database rules. Ask the map owner for the setup link.</p>
+    <div id="lockBox" hidden>
+      <h3>🔒 Lock this site to my map</h3>
+      <p class="note">Only your map will exist on this site: nobody can plug in their own EVE application or database, and nobody else can create a map. Players still open your map if you allow them in Access.</p>
+      <div class="row"><button type="button" class="small primary" id="btnLock">Download site.json</button><button type="button" class="small" id="btnLockRules">Copy the locked database rules</button></div>
+      <ol class="note" style="margin:6px 0 0 18px;padding:0">
+        <li>Upload <b>site.json</b> to your GitHub repository, next to index.html (Add file → Upload files → Commit).</li>
+        <li>In Firebase → Realtime Database → <b>Rules</b>: replace everything with the locked rules (button above), then <b>Publish</b>.</li>
+        <li>Reload the map with Ctrl+F5: Settings will show 🔒.</li>
+      </ol>
+    </div>
+    </div>
     <h3>3. Home and hubs</h3>
     <label class="f">Your k-space "home" system (optional)<input id="homeName" placeholder="e.g. Hek"></label>
     <div class="row"><button type="button" class="primary" id="saveSetup">Save</button><button type="button" id="closeSetup">Close</button></div>
@@ -450,7 +470,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '5.1';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '5.2';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -575,11 +595,14 @@ const dbRoot = () => cfg.cloud.db.replace(/\/+$/, '');
 const mapBase = () => `${dbRoot()}/maps/${slot.mapOwner}`;
 const cacheKey = () => shared() ? 'whmap.cache.' + slot.mapOwner : K.map;
 const remotePath = p => p.startsWith('pilots') ? p : 'data/' + p;
-const canEdit = () => !shared() || myRole !== 'view';
+/* ---------- Site lock (site.json next to index.html): only the owner's map exists on this site ---------- */
+let SITE_LOCK = null, lockState = 'out';   // out (not logged in) · pending · ok · noaccess
+const locked = () => !!SITE_LOCK && !demoMode;
+const canEdit = () => (locked() && lockState !== 'ok') ? false : (!shared() || myRole !== 'view');
 let streams = [], persistT = null, renderT = null, reconnectT = null, roToast = 0;
 
 if (/[?&]debug\b/.test(location.search)) window.__wh = { get map(){ return map; }, put:(...a) => put(...a), fit:(...a) => fitRoute(...a) };
-function persistLocal(){ clearTimeout(persistT); persistT = setTimeout(() => { if (!demoMode) store.set(cacheKey(), map); }, 300); }
+function persistLocal(){ if (locked() && (!shared() || lockState !== 'ok')) return; clearTimeout(persistT); persistT = setTimeout(() => { if (!demoMode) store.set(cacheKey(), map); }, 300); }
 function scheduleRender(){ clearTimeout(renderT); renderT = setTimeout(renderAll, 60); }
 function setAt(obj, parts, val){
   if (!parts.length) return val;
@@ -605,6 +628,7 @@ async function cloudLogin(){
   if (!s2.ok) throw new Error('Firebase refused the connection: check the Web API key and that Authentication is enabled (' + ((sj.error && sj.error.message) || s2.status) + ').');
   fb = { idToken:sj.idToken, refresh:sj.refreshToken, exp:Date.now() + Number(sj.expiresIn || 3600) * 1000, uid:j.uid, name:j.name };
   store.set(CK.fb + tok.charId, fb);
+  if (SITE_LOCK) slot.mapOwner = SITE_LOCK.owner;
   if (!slot.mapOwner) slot.mapOwner = fb.uid;
   saveCfg();
   fbReq('PUT', `maps/${fb.uid}/ownerName`, fb.name).catch(() => {});
@@ -636,7 +660,7 @@ async function remote(method, path, body){
     else setSync('err', 'Sharing: write error');
   }
 }
-function readOnlyToast(){ if (Date.now() - roToast > 4000){ roToast = Date.now(); toast('Read only: the map owner has not given you the right to edit it.', true); } }
+function readOnlyToast(){ if (locked() && lockState !== 'ok') return; if (Date.now() - roToast > 4000){ roToast = Date.now(); toast('Read only: the map owner has not given you the right to edit it.', true); } }
 /* Écrit une valeur (null = supprimer) localement et dans la base partagée */
 function put(path, val){
   if (!canEdit() && !path.startsWith('pilots')){ readOnlyToast(); return; }
@@ -658,14 +682,15 @@ let mapOwnerName = '';
 
 async function connectShared(){
   streams.forEach(e => e.close()); streams = []; clearTimeout(reconnectT);
-  $('#btnAccess').hidden = !(cloudReady() && fb);
-  if (!shared()){ myRole = 'owner'; setSync('', demoMode ? 'Demo' : (cloudReady() && !tok ? 'Local map · log in' : 'Local map')); return; }
+  if (SITE_LOCK && fb) slot.mapOwner = SITE_LOCK.owner;
+  $('#btnAccess').hidden = !(cloudReady() && fb) || (!!SITE_LOCK && fb && fb.uid !== SITE_LOCK.owner);
+  if (!shared()){ lockState = tok ? 'pending' : 'out'; renderLock(); if (locked()){ map = emptyMap(); setSync('', tok ? 'Private map · connecting' : 'Private map · log in'); return; } myRole = 'owner'; setSync('', demoMode ? 'Demo' : (cloudReady() && !tok ? 'Local map · log in' : 'Local map')); return; }
   try{ await ensureFb(); }catch(e){ toast(e.message, true); setSync('err', 'Sharing: log in again'); return; }
   map = normalize(store.get(cacheKey(), null));
   setSync('', 'Connecting to sharing…');
   // Rôle sur la carte affichée
   myMulti = false;
-  if (slot.mapOwner === fb.uid){ myRole = 'owner'; mapOwnerName = fb.name; }
+  if (slot.mapOwner === fb.uid){ myRole = 'owner'; mapOwnerName = fb.name; lockState = 'ok'; }
   else {
     try{
       const acl = await fbReq('GET', `maps/${slot.mapOwner}/acl/${fb.uid}`);
@@ -673,11 +698,14 @@ async function connectShared(){
       myRole = acl.role === 'edit' ? 'edit' : 'view';
       myMulti = acl.multi === true;
       mapOwnerName = await fbReq('GET', `maps/${slot.mapOwner}/ownerName`).catch(() => '') || '';
+      lockState = 'ok';
     }catch(e){
+      if (SITE_LOCK){ lockState = 'noaccess'; map = emptyMap(); setSync('err', 'No access'); renderLock(); renderAll(); return; }
       toast('You no longer have access to this map. Back to your own map.', true);
       slot.mapOwner = fb.uid; saveCfg(); return connectShared();
     }
   }
+  renderLock();
   let firstData = true;
   const open = (sub, apply) => {
     const es = new EventSource(`${mapBase()}/${sub}.json?auth=${encodeURIComponent(fb.idToken)}`);
@@ -1444,6 +1472,42 @@ async function toggleAssets(){
   if (missing.length) toast(`No permission to read assets for ${missing.join(', ')}: tick esi-assets.read_assets.v1 and esi-universe.read_structures.v1 in your EVE app, then Log out and log in again.`, true);
   else toast(`Assets found in ${total} system${total > 1 ? 's' : ''}. Only systems on the map show a 📦 badge.`);
 }
+function renderLock(){
+  const box = $('#lockMsg'); if (!box) return;
+  const show = locked() && lockState !== 'ok';
+  box.hidden = !show; if (!show) return;
+  const owner = SITE_LOCK.ownerName || 'the owner';
+  $('#lockText').innerHTML = lockState === 'noaccess'
+    ? `<b>${esc(tok ? tok.charName : '')}</b> has no access to this map.<br>Ask <b>${esc(owner)}</b> to add this character in <i>Access</i>, then reload the page.`
+    : lockState === 'pending' ? 'Checking your access…'
+    : `This map belongs to <b>${esc(owner)}</b>'s group.<br>Log in with EVE if you have been given access.`;
+  $('#lockLogin').hidden = lockState === 'pending';
+  $('#lockLogin').textContent = lockState === 'noaccess' ? 'Log in with another character' : 'EVE login';
+}
+async function loadSiteLock(){
+  try{ const r = await fetch('site.json', { cache:'no-store' }); if (r.ok){ const j = await r.json(); if (j && j.owner && j.clientId && j.worker && j.db && j.apiKey) SITE_LOCK = j; } }catch(e){}
+  if (!SITE_LOCK) return;
+  const nc = { worker:SITE_LOCK.worker, db:SITE_LOCK.db, apiKey:SITE_LOCK.apiKey };
+  const changed = JSON.stringify(nc) !== JSON.stringify(cfg.cloud) || cfg.clientId !== SITE_LOCK.clientId;
+  cfg.clientId = SITE_LOCK.clientId; cfg.cloud = nc;
+  if (changed){ fb = null; vaultChars().forEach(c => { store.del(CK.fb + c.charId); store.del(CK.slot + c.charId); }); }
+  slot.mapOwner = SITE_LOCK.owner; saveCfg();
+  if (!tok) map = emptyMap();
+  $('#setupTech').hidden = true; $('#setupTech2').hidden = true; $('#lockNote').hidden = false;
+  const ms = $('#mapSel'); if (ms) ms.closest('label').hidden = true;
+}
+function lockedRules(owner){
+  const O = `auth.uid === '${owner}'`, A = (sub) => `root.child('maps').child($owner).child('acl').child(auth.uid)${sub}`;
+  return JSON.stringify({ rules:{ '.read':false, '.write':false,
+    maps:{ $owner:{
+      ownerName:{ '.read':`auth != null && ($owner === auth.uid || ${A('.exists()')})`, '.write':`auth != null && $owner === auth.uid && ${O}` },
+      acl:{ '.read':`auth != null && ($owner === auth.uid || data.child(auth.uid).exists())`, '.write':`auth != null && $owner === auth.uid && ${O}` },
+      data:{ '.read':`auth != null && ($owner === auth.uid || ${A('.exists()')})`, '.write':`auth != null && $owner === '${owner}' && ($owner === auth.uid || ${A(".child('role').val() === 'edit'")})` },
+      pilots:{ '.read':`auth != null && ($owner === auth.uid || ${A('.exists()')})`,
+        $uid:{ '.write':`auth != null && $owner === '${owner}' && ($owner === auth.uid || ($uid === auth.uid && ${A('.exists()')}))`,
+          alts:{ '.validate':`$owner === auth.uid || ${A(".child('multi').val() === true")}` } } } } },
+    access:{ $uid:{ '.read':'auth != null && $uid === auth.uid', $owner:{ '.write':`auth != null && $owner === auth.uid && ${O}` } } } } }, null, 2);
+}
 function wpHelp(){
   toast('"Set destination" is not allowed by your EVE app yet. On developers.eveonline.com, open your app, tick esi-ui.write_waypoint.v1, save, then log out and log in again with EVE.', true);
 }
@@ -1539,7 +1603,7 @@ async function esiAs(a, path){
 /* Droit de suivre plusieurs personnages : toujours en local et pour le propriétaire, sinon accordé dans « Accès » */
 const canMulti = () => !shared() || myRole === 'owner' || myMulti;
 function logout(){
-  if (fb && shared()) remote('DELETE', `pilots/${fb.uid}`);
+  if (fb && shared() && !(locked() && lockState !== 'ok')) remote('DELETE', `pilots/${fb.uid}`);
   if (tok){ [CK.tok, CK.fb].forEach(k => store.del(k + tok.charId)); if (store.get('whmap.lastChar', null) === tok.charId) store.del('whmap.lastChar'); }
   sess.del('whmap.tabChar');
   tok = null; fb = null; tabChar = null; slot = { mapOwner:'' }; me = { current:null, alts:{} }; alts = [];
@@ -1625,7 +1689,7 @@ function myAltsInfo(){
 }
 let lastPilotPub = 0;
 function publishPilot(force){
-  if (!tok || !fb || !shared()) return;
+  if (!tok || !fb || !shared() || (locked() && lockState !== 'ok')) return;
   const now = Date.now();
   const p = map.pilots[fb.uid];
   const altsObj = {};
@@ -2810,6 +2874,7 @@ function refreshShareUi(){
     : (fb ? `Secure sharing active, logged in as ${fb.name}.` : 'Sharing configured: log in with EVE to enable it.');
 }
 function openSetup(){ if (DEMO_ONLY) return;
+  $('#lockBox').hidden = !!SITE_LOCK || !(fb && cloudReady());
   $('#cbUrl').textContent = callbackUrl; $('#clientId').value = cfg.clientId || ''; $('#pollSel').value = String(cfg.poll || 5);
   $('#cWorker').value = cfg.cloud.worker || ''; $('#cDb').value = cfg.cloud.db || ''; $('#cKey').value = cfg.cloud.apiKey || '';
   $('#homeName').value = cfg.home ? cfg.home.name : '';
@@ -2818,6 +2883,14 @@ function openSetup(){ if (DEMO_ONLY) return;
 function closeSetup(){ $('#setup').classList.remove('open'); }
 function normUrl(v){ v = (v || '').trim().replace(/\/+$/, ''); if (v && !/^https?:\/\//.test(v)) v = 'https://' + v; return v; }
 $('#btnSetup').addEventListener('click', openSetup);
+$('#btnLock').addEventListener('click', () => {
+  if (!fb || !cloudReady()){ toast('Log in with EVE (secure sharing active) first.', true); return; }
+  const j = { clientId:cfg.clientId, worker:cfg.cloud.worker, db:cfg.cloud.db, apiKey:cfg.cloud.apiKey, owner:fb.uid, ownerName:fb.name };
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(j, null, 2)], { type:'application/json' })); a.download = 'site.json'; a.click();
+  toast('site.json downloaded: upload it to GitHub next to index.html, then publish the locked rules in Firebase.');
+});
+$('#btnLockRules').addEventListener('click', () => { if (!fb){ toast('Log in with EVE first.', true); return; } copyText(lockedRules(fb.uid), 'Locked rules copied: paste them in Firebase → Realtime Database → Rules, then Publish.'); });
+$('#lockLogin').addEventListener('click', () => { if (lockState === 'noaccess'){ logout(); } login(); });
 $('#closeSetup').addEventListener('click', closeSetup);
 $('#saveSetup').addEventListener('click', async () => {
   cfg.clientId = $('#clientId').value.trim(); cfg.poll = Number($('#pollSel').value) || 5;
@@ -2952,14 +3025,15 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeSetup(
     setSync('', 'Demo · view only');
     return;
   }
-  handleConfigLink();
+  await loadSiteLock();
+  if (!SITE_LOCK) handleConfigLink(); else if (/#config=/.test(location.hash)) history.replaceState(null, '', callbackUrl);
   await handleCallback();
   if (tok && cloudReady() && (!fb || fb.uid !== 'eve-' + tok.charId)){
     try{ await cloudLogin(); }catch(e){ toast(e.message, true); }
   }
-  map = normalize(store.get(cacheKey(), null));
+  map = locked() && !(tok && fb) ? emptyMap() : normalize(store.get(cacheKey(), null));
   await connectShared();
-  renderAll(); center();
+  renderAll(); center(); renderLock();
   loadWhData(); loadActivity();
   setInterval(() => { loadActivity(); if (!drag) render(); renderPilots(); renderKillAlarms(); }, 30000);
   setTimeout(pollKills, 4000); setInterval(pollKills, 2 * 60000);
