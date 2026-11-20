@@ -95,6 +95,18 @@ svg#vol.panning{cursor:grabbing}
 .klist a:hover{text-decoration:underline}
 .klist .ago{font-family:var(--mono);color:var(--bad);min-width:62px}
 .legend .ka{display:inline-block;width:22px;height:10px;border:3px solid var(--bad);border-radius:3px}
+.hubbtn{border-color:#2f5f6a;color:var(--drift)}
+.hubbtn:hover{border-color:var(--drift)}
+.htable{width:100%;border-collapse:collapse;font-size:12px}
+.htable td,.htable th{padding:5px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+.htable tr.clk{cursor:pointer}
+.htable tr.clk:hover td{background:var(--panel-2)}
+.htable tr.open td{background:var(--panel-2)}
+.legs{font-size:11.5px;color:var(--dim);display:grid;gap:2px;padding:2px 0 4px}
+.legs b{color:var(--text)}
+.best{color:var(--ok);font-weight:700}
+.exp-soon{color:var(--warn)}
+.exp-eol{color:var(--bad)}
 .preview{stroke:var(--accent);stroke-width:3;stroke-dasharray:9 7;fill:none;pointer-events:none;opacity:.95}
 @media (prefers-reduced-motion:no-preference){.preview{animation:dash 1s linear infinite}}
 @keyframes dash{to{stroke-dashoffset:-16}}
@@ -202,13 +214,15 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Version de la carte">v2.1</span>
+  <span class="ver" id="appVersion" title="Version de la carte">v2.2</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Ajouter un système…" aria-label="Nom du système à ajouter">
     <button type="submit">Ajouter</button>
   </form>
   <span class="grow"></span>
   <span class="sync" id="syncState" title="État du partage">Carte locale</span>
+  <button id="btnThera" type="button" class="hubbtn" title="Centrer la carte sur Thera">Thera</button>
+  <button id="btnTurnur" type="button" class="hubbtn" title="Centrer la carte sur Turnur">Turnur</button>
   <button id="btnDemo" type="button">Mode démo</button>
   <button id="btnView" type="button" aria-pressed="false">Vue volume</button>
   <button id="btnCenter" type="button">Recentrer</button>
@@ -285,6 +299,17 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
     <section class="card">
       <h2>Sélection</h2>
       <div id="selBody" class="empty">Cliquez sur un système ou une connexion de la carte.</div>
+    </section>
+
+    <section class="card" id="hubCard">
+      <h2>Thera &amp; Turnur</h2>
+      <div class="tabs" role="tablist" aria-label="Thera et Turnur">
+        <button type="button" role="tab" data-htab="thera" aria-selected="true">Thera</button>
+        <button type="button" role="tab" data-htab="turnur" aria-selected="false">Turnur</button>
+        <button type="button" role="tab" data-htab="hubs" aria-selected="false">Routes vers les hubs</button>
+      </div>
+      <div id="hubBody"><span class="empty">Chargement des connexions EVE-Scout…</span></div>
+      <p class="note">Connexions publiées par EVE-Scout (Signal Cartel), mises à jour toutes les 5 minutes.</p>
     </section>
 
     <section class="card">
@@ -594,7 +619,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '2.1';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '2.2';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -945,8 +970,12 @@ async function gateConnected(a, b){
   }
   return false;
 }
+const gateStore = store.get('whmap.gates', {});   // les routes par portes ne changent pas : cache permanent
+let gateSaveT = null;
 async function routeJumps(origin, dest){
+  if (String(origin) === String(dest)) return 0;
   const key = origin + '>' + dest;
+  if (key in gateStore) return gateStore[key];
   if (routeCache.has(key)) return routeCache.get(key);
   let ids = null;
   try{
@@ -958,8 +987,207 @@ async function routeJumps(origin, dest){
   }
   const n = Array.isArray(ids) ? Math.max(0, ids.length - 1) : null;
   routeCache.set(key, n);
+  if (n != null){ gateStore[key] = n; gateStore[dest + '>' + origin] = n; clearTimeout(gateSaveT); gateSaveT = setTimeout(() => store.set('whmap.gates', gateStore), 1000); }
   return n;
 }
+/* Lance des calculs en parallèle (6 à la fois) pour ne pas saturer ESI */
+async function pool(tasks, n = 6){
+  const out = new Array(tasks.length); let i = 0;
+  await Promise.all(Array.from({ length:Math.min(n, tasks.length) }, async () => { while (i < tasks.length){ const k = i++; out[k] = await tasks[k](); } }));
+  return out;
+}
+
+/* =========================================================
+   Thera et Turnur : connexions publiques EVE-Scout
+   ========================================================= */
+const HUB = { thera:{ id:31000005, name:'Thera' }, turnur:{ id:30002086, name:'Turnur' } };
+const HUB_IDS = [HUB.thera.id, HUB.turnur.id];
+let hubData = { conns:[], t:0, error:false };
+const SIZE_MAP = { small:'S', medium:'M', large:'L', xlarge:'XL', capital:'XL' };
+async function loadHubs(){
+  try{
+    const r = await fetch('https://api.eve-scout.com/v2/public/signatures');
+    if (!r.ok) throw 0;
+    const j = await r.json();
+    hubData = { t:Date.now(), error:false, conns:(Array.isArray(j) ? j : []).filter(c => c && (c.signature_type || 'wormhole') === 'wormhole' && HUB_IDS.includes(Number(c.out_system_id)) && c.in_system_id).map(c => ({
+      sid:String(c.id), hub:Number(c.out_system_id), sys:Number(c.in_system_id), name:c.in_system_name || '?', cls:String(c.in_system_class || ''),
+      region:c.in_region_name || '', wh:c.wh_type || '', size:SIZE_MAP[String(c.max_ship_size || '').toLowerCase()] || '?', sizeTxt:c.max_ship_size || '',
+      expires:Date.parse(c.expires_at) || null, outSig:c.out_signature || '', inSig:c.in_signature || '' })) };
+  }catch(e){ hubData.error = true; }
+  await syncHubLinks();
+  renderHubCard();
+}
+const hubConns = hubId => hubData.conns.filter(c => c.hub === hubId && (!c.expires || c.expires > Date.now()));
+const isKcls = c => /^(hs|ls|ns|high|low|null|0\.|pochven)/i.test(c) || ['hs','ls','ns'].includes(String(c).toLowerCase());
+/* Si Thera ou Turnur est sur la carte : ajoute ses sorties et les relie (identifiant stable par signature : pas de doublon) */
+let hubSyncing = false;
+async function syncHubLinks(){
+  if (hubSyncing || demoMode || !canEdit() || hubData.error || !hubData.t) return;
+  hubSyncing = true;
+  try{
+    for (const hubId of HUB_IDS){
+      if (!map.nodes[hubId]) continue;
+      const conns = hubConns(hubId);
+      const keep = new Set(conns.map(c => 'scout-' + c.sid));
+      // retire les connexions EVE-Scout disparues ou expirées
+      for (const l of linksArr()) if (l.src === 'eve-scout' && (String(l.a) === String(hubId) || String(l.b) === String(hubId)) && !keep.has(l.id)){
+        const other = String(l.a) === String(hubId) ? l.b : l.a;
+        put(`links/${l.id}`, null);
+        const o = map.nodes[other];
+        if (o && o.scout && String(other) !== String(me.current) && !linksArr().some(x => x.a == other || x.b == other) && !(o.sigs || []).length && !o.notes) put(`nodes/${other}`, null);
+      }
+      let i = 0;
+      for (const c of conns){
+        if (!map.nodes[c.sys]){
+          try{
+            const d = await systemInfo(c.sys);
+            const pos = hubSpot(hubId, i, conns.length);
+            put(`nodes/${c.sys}`, { id:c.sys, name:d.name, sec:d.sec, region:d.region, cls:d.cls, stargates:d.stargates || [], x:pos.x, y:pos.y, notes:'', sigs:[], scout:true });
+          }catch(e){ continue; }
+        }
+        i++;
+        const id = 'scout-' + c.sid;
+        if (linkBetween(hubId, c.sys) && !map.links[id]) continue;   // déjà relié à la main
+        const cur = map.links[id];
+        const rec = { id, a:hubId, b:c.sys, type:'wh', mass:(cur && cur.mass) || 'fresh', eol:!!(c.expires && c.expires - Date.now() < 4 * 3600e3), eolAt:null, size:c.size, wh:c.wh && c.wh !== 'K162' ? c.wh : '', created:(cur && cur.created) || Date.now(), passes:(cur && cur.passes) || [], src:'eve-scout', expires:c.expires, sigs:`${c.outSig} → ${c.inSig}` };
+        if (!cur || cur.expires !== rec.expires || cur.size !== rec.size || cur.eol !== rec.eol) put(`links/${id}`, rec);
+      }
+    }
+  } finally { hubSyncing = false; }
+}
+/* Place les sorties en étoile autour du hub, sans chevauchement */
+function hubSpot(hubId, i, total){
+  const h = map.nodes[hubId];
+  const taken = (x, y) => Object.values(map.nodes).some(n => n && Math.abs(n.x - x) < NW + 20 && Math.abs(n.y - y) < NH + 24);
+  for (let ring = 0; ring < 6; ring++){
+    const r = 330 + ring * 150 + (i % 2) * 70, a = (i / Math.max(1, total)) * Math.PI * 2 + ring * 0.13;
+    const x = Math.round(h.x + Math.cos(a) * r), y = Math.round(h.y + Math.sin(a) * r * 0.75);
+    if (!taken(x, y)) return { x, y };
+  }
+  return freeSpot(hubId);
+}
+async function gotoHub(key){
+  const hub = HUB[key];
+  if (!map.nodes[hub.id]){
+    if (!canEdit()){ toast(`${hub.name} n'est pas sur cette carte et vous êtes en lecture seule.`, true); return; }
+    try{ await ensureNode(hub.id, map.nodes[me.current] ? me.current : null); }catch(e){ toast('Impossible d\'ajouter ' + hub.name + ' : ' + e.message, true); return; }
+    toast(`${hub.name} ajouté avec ses ${hubConns(hub.id).length} connexions connues.`);
+    await syncHubLinks();
+  }
+  focusSystem(hub.id);
+}
+
+/* ---------- Calcul des chemins : carte + portes + trous de ver ---------- */
+// Points de départ en k-space : votre système s'il est en k-space, sinon les systèmes k-space de la carte que vous pouvez rejoindre
+function routeOrigins(){
+  if (me.current == null || !map.nodes[me.current]) return [];
+  const cur = map.nodes[me.current];
+  if (isK(cur.cls) && isRealId(cur.id)) return [{ sys:cur.id, hops:0, path:[String(cur.id)] }];
+  const out = [];
+  for (const id in map.nodes){
+    const n = map.nodes[id]; if (!n || !isK(n.cls) || !isRealId(id)) continue;
+    const p = findPath(me.current, id); if (p && !p.none) out.push({ sys:Number(id), hops:p.ids.length - 1, path:p.ids });
+  }
+  return out.sort((a, b) => a.hops - b.hops).slice(0, 5);
+}
+const nm = id => (map.nodes[id] && map.nodes[id].name) || (HUBS.find(h => h.id == id) || {}).name || (cfg.home && cfg.home.id == id ? cfg.home.name : '') || (hubData.conns.find(c => c.sys == id) || {}).name || (Object.values(HUB).find(h => h.id == id) || {}).name || String(id);
+const mapLeg = o => o.hops ? `Carte : ${o.path.map(nm).join(' → ')} (${o.hops} saut${o.hops > 1 ? 's' : ''})` : null;
+// Meilleur moyen d'atteindre un système k-space depuis votre position (carte, puis portes)
+async function reachK(target){
+  let best = null;
+  const origins = routeOrigins();
+  const res = await pool(origins.map(o => async () => ({ o, g:await routeJumps(o.sys, target) })));
+  for (const { o, g } of res) if (g != null && (!best || o.hops + g < best.cost)) best = { cost:o.hops + g, legs:[mapLeg(o), g ? `Portes : ${nm(o.sys)} → ${nm(target)} (${g} saut${g > 1 ? 's' : ''})` : null].filter(Boolean) };
+  return best;
+}
+// Meilleur moyen d'entrer dans un hub (Thera ou Turnur)
+async function reachHub(hubId){
+  let best = null;
+  const cand = c => { if (c && (!best || c.cost < best.cost)) best = c; };
+  if (map.nodes[hubId] && me.current != null){ const p = findPath(me.current, hubId); if (p && !p.none) cand({ cost:p.ids.length - 1, legs:[`Carte : ${p.ids.map(nm).join(' → ')} (${p.ids.length - 1} saut${p.ids.length > 2 ? 's' : ''})`] }); }
+  if (hubId === HUB.turnur.id){ const r = await reachK(hubId); if (r) cand(r); }
+  const exits = hubConns(hubId).filter(c => isKcls(c.cls));
+  const rs = await pool(exits.map(c => async () => ({ c, r:await reachK(c.sys) })));
+  for (const { c, r } of rs) if (r) cand({ cost:r.cost + 1, legs:[...r.legs, `Trou de ver : ${c.name} → ${nm(hubId)} (sig ${c.inSig || '?'}, max ${c.size})`] });
+  return best;
+}
+// Meilleur moyen de sortir d'un hub vers un système k-space
+async function leaveHub(hubId, target){
+  let best = null;
+  const cand = c => { if (c && (!best || c.cost < best.cost)) best = c; };
+  if (hubId === HUB.turnur.id){ const g = await routeJumps(hubId, target); if (g != null) cand({ cost:g, legs:[`Portes : Turnur → ${nm(target)} (${g} saut${g > 1 ? 's' : ''})`] }); }
+  const exits = hubConns(hubId).filter(c => isKcls(c.cls));
+  const gs = await pool(exits.map(c => async () => ({ c, g:await routeJumps(c.sys, target) })));
+  for (const { c, g } of gs) if (g != null) cand({ cost:1 + g, legs:[`Trou de ver : ${nm(hubId)} → ${c.name} (sig ${c.outSig || '?'}, max ${c.size})`, g ? `Portes : ${c.name} → ${nm(target)} (${g} saut${g > 1 ? 's' : ''})` : null].filter(Boolean) });
+  return best;
+}
+let hubTab = 'thera', hubCalc = {}, hubRoutes = null, hubBusy = false, hubOpen = null;
+function renderHubCard(){
+  const box = $('#hubBody'); if (!box) return;
+  document.querySelectorAll('#hubCard [data-htab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.htab === hubTab)));
+  if (hubData.error && !hubData.t){ box.innerHTML = '<span class="badline">EVE-Scout est injoignable pour le moment. Nouvel essai dans 5 minutes.</span>'; return; }
+  if (!hubData.t){ box.innerHTML = '<span class="empty">Chargement des connexions EVE-Scout…</span>'; return; }
+  const who = tok ? tok.charName : (demoMode ? 'vous' : '');
+  const origin = me.current != null && map.nodes[me.current] ? map.nodes[me.current].name : null;
+  const now = Date.now();
+  if (hubTab === 'hubs'){
+    const dests = HUB_TRADE();
+    box.innerHTML = `<p class="note">Itinéraires depuis ${origin ? `<b>${esc(origin)}</b>` : 'votre position'} : par les portes, ou en passant par Thera ou Turnur. Un saut de trou de ver compte pour 1.</p>
+      <div class="row"><button type="button" class="small" id="hubCalcRoutes"${hubBusy || !origin ? ' disabled' : ''}>${hubBusy ? 'Calcul en cours…' : 'Calculer les routes'}</button>${origin ? '' : '<span class="note">Connectez un personnage présent sur la carte.</span>'}</div>
+      ${hubRoutes ? `<table class="htable"><thead><tr><th>Hub</th><th class="r">Portes</th><th class="r">Via Thera</th><th class="r">Via Turnur</th></tr></thead><tbody>${dests.map(d => {
+        const r = hubRoutes[d.id] || {}; const vals = [r.direct, r.thera, r.turnur].map(x => x ? x.cost : null);
+        const min = Math.min(...vals.filter(v => v != null));
+        const cell = v => v == null ? '<td class="r dim">–</td>' : `<td class="r mono${v === min ? ' best' : ''}">${v}</td>`;
+        const open = hubOpen === 'h' + d.id;
+        return `<tr class="clk${open ? ' open' : ''}" data-hopen="h${d.id}"><td><b>${esc(d.name)}</b></td>${vals.map(cell).join('')}</tr>${open ? `<tr><td colspan="4">${['direct', 'thera', 'turnur'].filter(k => r[k]).map(k => `<div class="legs"><b>${k === 'direct' ? 'Par les portes' : k === 'thera' ? 'Via Thera' : 'Via Turnur'} : ${r[k].cost} sauts</b>${r[k].legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>`).join('') || '<span class="dim">Aucun itinéraire trouvé.</span>'}</td></tr>` : ''}`;
+      }).join('')}</tbody></table><p class="note">Cliquez sur une ligne pour voir le détail du chemin. En vert : le plus court.</p>` : ''}`;
+  } else {
+    const hub = HUB[hubTab], conns = hubConns(hub.id).sort((a, b) => (hubCalc[b.sid] ? 0 : 0) || String(a.name).localeCompare(String(b.name)));
+    const onMap = !!map.nodes[hub.id];
+    const reach = hubCalc['hub' + hub.id];
+    box.innerHTML = `<div class="row"><button type="button" class="small" id="hubGo">${onMap ? 'Centrer sur ' + hub.name : 'Ajouter ' + hub.name + ' à la carte'}</button>
+        <button type="button" class="small" id="hubCalcJ"${hubBusy || !origin ? ' disabled' : ''}>${hubBusy ? 'Calcul…' : 'Calculer les sauts'}</button></div>
+      ${reach !== undefined ? `<div class="routebox">${reach ? `Rejoindre <b>${hub.name}</b> depuis ${esc(who || origin)} : <b>${reach.cost} saut${reach.cost > 1 ? 's' : ''}</b><div class="legs">${reach.legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>` : `Aucun chemin trouvé vers ${hub.name} depuis votre position.`}</div>` : ''}
+      ${conns.length ? `<table class="htable"><thead><tr><th>Sortie</th><th>Taille</th><th>Reste</th><th class="r">Sauts</th></tr></thead><tbody>${conns.map(c => {
+        const rem = c.expires ? (c.expires - now) / 60000 : null;
+        const j = hubCalc[c.sid]; const open = hubOpen === c.sid;
+        return `<tr class="clk${open ? ' open' : ''}" data-hopen="${esc(c.sid)}"><td><b>${esc(c.name)}</b> <span class="dim">${esc(String(c.cls).toUpperCase())}</span><br><span class="dim">${esc(c.region)}</span></td><td class="mono">${esc(c.size)}</td>
+          <td class="mono ${rem != null && rem < 240 ? 'exp-eol' : rem != null && rem < 480 ? 'exp-soon' : ''}">${rem != null ? fmtDur(rem) : '?'}</td>
+          <td class="r mono">${j === undefined ? '·' : j ? j.cost : '–'}</td></tr>${open ? `<tr><td colspan="4"><div class="legs"><span>Signatures : ${esc(c.outSig || '?')} (${hub.name}) → ${esc(c.inSig || '?')} (${esc(c.name)})${c.wh ? ' · type ' + esc(c.wh) : ''}</span>${j ? `<b>Depuis votre position : ${j.cost} sauts</b>${j.legs.map(l => `<span>${esc(l)}</span>`).join('')}` : j === null ? '<span>Pas de chemin connu depuis votre position.</span>' : '<span>Cliquez sur « Calculer les sauts ».</span>'}</div>${map.nodes[c.sys] ? `<button type="button" class="small" data-hfocus="${c.sys}">Voir sur la carte</button>` : ''}</td></tr>` : ''}`;
+      }).join('')}</tbody></table>` : '<span class="empty">Aucune connexion publiée pour le moment.</span>'}
+      <p class="note">Mis à jour il y a ${fmtDur((now - hubData.t) / 60000)}. Cliquez sur une sortie pour le détail.</p>`;
+    $('#hubGo').addEventListener('click', () => gotoHub(hubTab));
+    $('#hubCalcJ').addEventListener('click', async () => {
+      hubBusy = true; renderHubCard();
+      try{
+        const r = await reachHub(hub.id); hubCalc['hub' + hub.id] = r;
+        const ks = conns.filter(c => isKcls(c.cls));
+        const rs = await pool(ks.map(c => async () => ({ c, r:await reachK(c.sys) })));
+        for (const { c, r } of rs) hubCalc[c.sid] = r ? r : null;
+        for (const c of conns.filter(c => !isKcls(c.cls))){ const p = me.current != null && map.nodes[c.sys] ? findPath(me.current, c.sys) : null; hubCalc[c.sid] = p && !p.none ? { cost:p.ids.length - 1, legs:[`Carte : ${p.ids.map(nm).join(' → ')}`] } : (r ? { cost:r.cost + 1, legs:[...r.legs, `Trou de ver : ${hub.name} → ${c.name}`] } : null); }
+      }catch(e){ toast('Calcul impossible : ' + e.message, true); }
+      hubBusy = false; renderHubCard();
+    });
+  }
+  box.querySelectorAll('[data-hopen]').forEach(tr => tr.addEventListener('click', () => { hubOpen = hubOpen === tr.dataset.hopen ? null : tr.dataset.hopen; renderHubCard(); }));
+  box.querySelectorAll('[data-hfocus]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); focusSystem(b.dataset.hfocus); }));
+  const cr = $('#hubCalcRoutes');
+  if (cr) cr.addEventListener('click', async () => {
+    hubBusy = true; renderHubCard();
+    try{
+      const res = {};
+      const [toThera, toTurnur] = [await reachHub(HUB.thera.id), await reachHub(HUB.turnur.id)];
+      for (const d of HUB_TRADE()){
+        const direct = await reachK(d.id);
+        const [lt, lu] = [await leaveHub(HUB.thera.id, d.id), await leaveHub(HUB.turnur.id, d.id)];
+        res[d.id] = { direct, thera:toThera && lt ? { cost:toThera.cost + lt.cost, legs:[...toThera.legs, ...lt.legs] } : null, turnur:toTurnur && lu ? { cost:toTurnur.cost + lu.cost, legs:[...toTurnur.legs, ...lu.legs] } : null };
+      }
+      hubRoutes = res;
+    }catch(e){ toast('Calcul impossible : ' + e.message, true); }
+    hubBusy = false; renderHubCard();
+  });
+}
+const HUB_TRADE = () => HUBS.concat(cfg.home ? [cfg.home] : []);
 async function loadActivity(){
   if (Date.now() - activity.t < 10 * 60000) return;
   try{
@@ -1338,6 +1566,10 @@ function stopDemo(){
 function lifeInfo(l){
   const now = Date.now(), t = typeInfo(l.wh);
   const ageMin = l.created ? (now - l.created) / 60000 : null;
+  if (l.src === 'eve-scout' && l.expires){
+    const remain = (l.expires - now) / 60000;
+    return { label:(remain < 240 ? 'EOL ' : '') + '≤ ' + fmtDur(remain), remain, eol:remain < 240 };
+  }
   if (l.eol){
     const since = l.eolAt || now;
     return { label:'EOL ≤ ' + fmtDur(240 - (now - since) / 60000), remain:240 - (now - since) / 60000, eol:true };
@@ -1369,21 +1601,29 @@ function el(tag, attrs, parent){ const e = document.createElementNS(svgNS, tag);
 function applyView(){ $('#vp').setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`); }
 function activePilots(){
   const now = Date.now(), out = [];
+  // Vos propres personnages (principal + suivis) ne doivent apparaître qu'une fois : dans votre liste
+  const mine = new Set([tok && tok.charId, ...(canMulti() ? alts.map(a => a.charId) : [])].filter(Boolean).map(String));
+  const seen = new Set(mine);
+  // les personnages qui publient eux-mêmes leur position passent avant ceux suivis par un autre onglet
+  for (const id in map.pilots){ const m = /^eve-(\d+)$/.exec(id); if (m && !mine.has(m[1]) && map.pilots[id]) seen.add(m[1]); }
   for (const id in map.pilots){
     const p = map.pilots[id]; if (!p) continue;
     if (fb && String(id) === String(fb.uid)) continue;
+    const m = /^eve-(\d+)$/.exec(id);
+    if (m && mine.has(m[1])) continue;
     const age = now - (p.t || 0);
     if (age > 24 * 3600e3 && !demoMode) continue;             // au-delà de 24 h on n'affiche plus
     const fresh = demoMode || age < 3 * 60000;                // onglet fermé depuis plus de 3 min = déconnecté
     out.push(Object.assign({ id }, p, { alts:undefined, live:!!p.online && fresh }));
-    if (p.alts) for (const k in p.alts){ const a = p.alts[k]; if (a) out.push({ id:id + '-' + k, name:a.name, sys:a.sys, ship:a.ship, online:!!a.online, live:!!a.online && fresh, t:p.t, altOf:p.name }); }
+    if (p.alts) for (const k in p.alts){ const a = p.alts[k]; if (!a || seen.has(String(k))) continue; seen.add(String(k)); if (a) out.push({ id:id + '-' + k, name:a.name, sys:a.sys, ship:a.ship, online:!!a.online, live:!!a.online && fresh, t:p.t, altOf:p.name }); }
   }
   return out;
 }
 function mineAt(sysId){
   const names = [];
-  if (me.current != null && String(me.current) === String(sysId)) names.push({ name:tok ? tok.charName : 'Vous', live:!!pilot.online });
-  if (canMulti()) for (const a of myAltsInfo()) if (a.sys != null && String(a.sys) === String(sysId)) names.push({ name:a.name, live:!!a.online });
+  // Sur la carte, seuls les personnages en jeu sont affichés (les déconnectés restent dans le panneau de gauche)
+  if (me.current != null && String(me.current) === String(sysId) && (pilot.online || demoMode)) names.push({ name:tok ? tok.charName : 'Vous', live:true });
+  if (canMulti()) for (const a of myAltsInfo()) if (a.online && a.sys != null && String(a.sys) === String(sysId)) names.push({ name:a.name, live:true });
   return names;
 }
 /* Écrit des noms de pilotes colorés (vert = en jeu, rouge = déconnecté) dans un <text> SVG */
@@ -1394,7 +1634,8 @@ function whoSpans(textEl, items, prefix){
     const t = document.createElementNS(svgNS, 'tspan'); t.setAttribute('class', it.live ? 'live' : 'dead'); t.textContent = it.name; textEl.appendChild(t);
   });
 }
-function renderAll(){ render(); renderLog(); renderPilot(); renderPilots(); renderExits(); renderKillAlarms(); }
+let hubSyncT = null;
+function renderAll(){ render(); renderLog(); renderPilot(); renderPilots(); renderExits(); renderKillAlarms(); renderHubCard(); clearTimeout(hubSyncT); hubSyncT = setTimeout(syncHubLinks, 1500); }
 function render(){
   const vol = cfg.view === 'vol';
   $('#map').toggleAttribute('hidden', vol); $('#vol').toggleAttribute('hidden', !vol); $('#volHint').hidden = !vol;
@@ -1429,7 +1670,7 @@ function render(){
     }
   }
   const pilotsBySys = {};
-  for (const p of activePilots()){ (pilotsBySys[p.sys] = pilotsBySys[p.sys] || []).push({ name:p.name, live:p.live }); }
+  for (const p of activePilots()){ if (p.live) (pilotsBySys[p.sys] = pilotsBySys[p.sys] || []).push({ name:p.name, live:true }); }
   for (const id in map.nodes){
     const n = map.nodes[id]; if (!n) continue;
     const c = CLASS[n.cls] || CLASS['?'];
@@ -1588,7 +1829,7 @@ function renderVolume(){
   for (const id of ids) items.push({ kind:'node', id, p:P[id], depth:P[id].depth });
   items.sort((u, v) => u.depth - v.depth);
   const pilotsBySys = {};
-  for (const p of activePilots()) (pilotsBySys[p.sys] = pilotsBySys[p.sys] || []).push({ name:p.name, live:p.live });
+  for (const p of activePilots()) if (p.live) (pilotsBySys[p.sys] = pilotsBySys[p.sys] || []).push({ name:p.name, live:true });
   for (const it of items){
     if (it.kind === 'link'){
       const l = it.l, w = Math.max(1.2, 3 * (it.a.s + it.b.s) / 2);
@@ -2152,6 +2393,9 @@ $('#addForm').addEventListener('submit', async ev => {
   }catch(e){ toast(e.message, true); }
 });
 $('#btnDemo').addEventListener('click', startDemo);
+$('#btnThera').addEventListener('click', () => gotoHub('thera'));
+$('#btnTurnur').addEventListener('click', () => gotoHub('turnur'));
+document.querySelectorAll('#hubCard [data-htab]').forEach(b => b.addEventListener('click', () => { hubTab = b.dataset.htab; hubOpen = null; renderHubCard(); }));
 $('#btnCenter').addEventListener('click', () => { if (cfg.view === 'vol'){ vcam = { yaw:-0.5, pitch:0.95, k:1, px:0, py:0 }; renderVolume(); } else center(); });
 $('#btnView').addEventListener('click', () => { cfg.view = cfg.view === 'vol' ? 'flat' : 'vol'; saveCfg(); render(); if (cfg.view !== 'vol') center(); });
 $('#zin').addEventListener('click', () => { if (cfg.view === 'vol'){ vcam.k = Math.min(3, vcam.k * 1.2); renderVolume(); return; } const r = svg.getBoundingClientRect(); zoomAt(1.2, r.width / 2, r.height / 2); });
@@ -2355,6 +2599,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeSetup(
   loadWhData(); loadActivity();
   setInterval(() => { loadActivity(); if (!drag) render(); renderPilots(); renderKillAlarms(); }, 30000);
   setTimeout(pollKills, 4000); setInterval(pollKills, 2 * 60000);
+  loadHubs(); setInterval(loadHubs, 5 * 60000);
   if (location.protocol === 'file:') toast('Le mode démo fonctionne partout. Pour la connexion EVE, ouvrez la carte depuis son adresse en ligne (voir Aide).', true);
   if (tok && cfg.clientId) startTracking();
   else if (!cfg.clientId && location.protocol !== 'file:') openSetup();
