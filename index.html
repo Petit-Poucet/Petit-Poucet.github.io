@@ -253,7 +253,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v5.3</span>
+  <span class="ver" id="appVersion" title="Map version">v5.4</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -392,8 +392,9 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
     <label class="f">Firebase database URL (Realtime Database)<input id="cDb" class="mono" spellcheck="false" placeholder="https://my-project-default-rtdb.europe-west1.firebasedatabase.app"></label>
     <label class="f">Firebase Web API key<input id="cKey" class="mono" spellcheck="false" placeholder="AIza…"></label>
     <p class="note">These three values are not secret: protection comes from CCP identity checks and the database rules. Ask the map owner for the setup link.</p>
+    </div>
     <div id="lockBox" hidden>
-      <h3>🔒 Lock this site to my map</h3>
+      <h3 id="lockTitle">🔒 Lock this site to my map</h3>
       <p class="note">Only your map will exist on this site: nobody can plug in their own EVE application or database, and nobody else can create a map. Players still open your map if you allow them in Access.</p>
       <div class="row"><button type="button" class="small primary" id="btnLock">Download site.json</button><button type="button" class="small" id="btnLockRules">Copy the locked database rules</button></div>
       <ol class="note" style="margin:6px 0 0 18px;padding:0">
@@ -401,7 +402,6 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
         <li>In Firebase → Realtime Database → <b>Rules</b>: replace everything with the locked rules (button above), then <b>Publish</b>.</li>
         <li>Reload the map with Ctrl+F5: Settings will show 🔒.</li>
       </ol>
-    </div>
     </div>
     <h3>3. Home and hubs</h3>
     <label class="f">Your k-space "home" system (optional)<input id="homeName" placeholder="e.g. Hek"></label>
@@ -482,7 +482,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '5.3';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '5.4';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -2907,7 +2907,11 @@ function refreshShareUi(){
     : (fb ? `Secure sharing active, logged in as ${fb.name}.` : 'Sharing configured: log in with EVE to enable it.');
 }
 function openSetup(){ if (DEMO_ONLY) return;
-  $('#lockBox').hidden = !!SITE_LOCK || !(fb && cloudReady());
+  // owner only: lock the site, and later re-copy the database rules after an update
+  const isSiteOwner = SITE_LOCK ? !!(fb && fb.uid === SITE_LOCK.owner) : !!(fb && cloudReady());
+  $('#lockBox').hidden = !isSiteOwner;
+  $('#lockTitle').textContent = SITE_LOCK ? '🔒 Site locked: database rules' : '🔒 Lock this site to my map';
+  $('#btnLock').hidden = !!SITE_LOCK;
   $('#cbUrl').textContent = callbackUrl; $('#clientId').value = cfg.clientId || ''; $('#pollSel').value = String(cfg.poll || 5);
   $('#cWorker').value = cfg.cloud.worker || ''; $('#cDb').value = cfg.cloud.db || ''; $('#cKey').value = cfg.cloud.apiKey || '';
   $('#homeName').value = cfg.home ? cfg.home.name : '';
