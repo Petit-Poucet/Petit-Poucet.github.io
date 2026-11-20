@@ -96,6 +96,16 @@ svg#vol.panning{cursor:grabbing}
 .klist .ago{font-family:var(--mono);color:var(--bad);min-width:62px}
 .legend .ka{display:inline-block;width:22px;height:10px;border:3px solid var(--bad);border-radius:3px}
 .hubbtn{border-color:#2f5f6a;color:var(--drift)}
+.navbtns{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding-left:8px;border-left:1px solid var(--line)}
+.exitgrp{display:inline-flex}
+.exitbtn{border-color:#24533a;color:var(--ok);font-weight:600}
+.exitbtn:hover{border-color:var(--ok)}
+.exitbtn.set{background:#123222}
+#btnExit{border-top-right-radius:0;border-bottom-right-radius:0}
+#btnExit:only-child,#btnExitSet[hidden]{border-radius:3px}
+#btnExitSet{border-left:0;border-top-left-radius:0;border-bottom-left-radius:0;padding:6px 8px}
+.exittag rect{fill:var(--ok)}
+.exittag text{font-family:var(--mono);font-size:10px;font-weight:700;fill:#06210f}
 .hubbtn:hover{border-color:var(--drift)}
 .htable{width:100%;border-collapse:collapse;font-size:12px}
 .htable td,.htable th{padding:5px 4px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -214,15 +224,22 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Version de la carte">v2.2</span>
+  <span class="ver" id="appVersion" title="Version de la carte">v2.3</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Ajouter un système…" aria-label="Nom du système à ajouter">
     <button type="submit">Ajouter</button>
   </form>
+  <div class="navbtns" role="group" aria-label="Aller à">
+    <button id="btnHere" type="button" title="Centrer la carte sur le système de votre personnage">◎ Ma position</button>
+    <button id="btnHome" type="button" title="Centrer la carte sur votre système maison">⌂ Home</button>
+    <button id="btnThera" type="button" class="hubbtn" title="Centrer la carte sur Thera">Thera</button>
+    <button id="btnTurnur" type="button" class="hubbtn" title="Centrer la carte sur Turnur">Turnur</button>
+    <span class="exitgrp">
+      <button id="btnExit" type="button" class="exitbtn" title="Définir l'EXIT sur votre système actuel">EXIT</button><button id="btnExitSet" type="button" class="exitbtn pin" title="Redéfinir l'EXIT sur votre système actuel" aria-label="Redéfinir l'EXIT sur votre système actuel" hidden>📍</button>
+    </span>
+  </div>
   <span class="grow"></span>
   <span class="sync" id="syncState" title="État du partage">Carte locale</span>
-  <button id="btnThera" type="button" class="hubbtn" title="Centrer la carte sur Thera">Thera</button>
-  <button id="btnTurnur" type="button" class="hubbtn" title="Centrer la carte sur Turnur">Turnur</button>
   <button id="btnDemo" type="button">Mode démo</button>
   <button id="btnView" type="button" aria-pressed="false">Vue volume</button>
   <button id="btnCenter" type="button">Recentrer</button>
@@ -619,7 +636,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '2.2';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '2.3';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -711,7 +728,7 @@ let zkill = {};
 function emptyMap(){ return { nodes:{}, links:{}, pilots:{}, log:{} }; }
 function normalize(m){
   m = m || {};
-  const out = { nodes:m.nodes || {}, links:m.links || {}, pilots:m.pilots || {}, log:m.log || {} };
+  const out = { nodes:m.nodes || {}, links:m.links || {}, pilots:m.pilots || {}, log:m.log || {}, exit:m.exit || null };
   if (Array.isArray(m.links)) { out.links = {}; m.links.forEach(l => { if (l) out.links[l.id] = l; }); }
   if (Array.isArray(m.log)) { out.log = {}; m.log.forEach((e, i) => { if (e) out.log['k' + i] = e; }); }
   for (const id in out.nodes){ const n = out.nodes[id]; n.sigs = arr(n.sigs); }
@@ -867,7 +884,7 @@ async function connectShared(){
       }
       firstData = false;
       const d = data || {};
-      map.nodes = d.nodes || {}; map.links = d.links || {}; map.log = d.log || {};
+      map.nodes = d.nodes || {}; map.links = d.links || {}; map.log = d.log || {}; map.exit = d.exit || null;
     } else setAt(map, path.slice(1).split('/'), data);
     map = normalize(map);
   });
@@ -1025,6 +1042,7 @@ async function syncHubLinks(){
   if (hubSyncing || demoMode || !canEdit() || hubData.error || !hubData.t) return;
   hubSyncing = true;
   try{
+    await ensureHubNodes();
     for (const hubId of HUB_IDS){
       if (!map.nodes[hubId]) continue;
       const conns = hubConns(hubId);
@@ -1055,6 +1073,21 @@ async function syncHubLinks(){
     }
   } finally { hubSyncing = false; }
 }
+/* Thera et Turnur sont toujours présents : s'ils manquent, on les place à droite de la chaîne, en groupes séparés */
+async function ensureHubNodes(){
+  const missing = HUB_IDS.filter(id => !map.nodes[id]);
+  if (!missing.length) return;
+  const others = Object.values(map.nodes).filter(n => n && !n.scout && !HUB_IDS.includes(Number(n.id)));
+  const maxX = others.length ? Math.max(...others.map(n => n.x)) : 0, minY = others.length ? Math.min(...others.map(n => n.y)) : 0;
+  for (const id of missing){
+    try{
+      const d = await systemInfo(id);
+      const other = HUB_IDS.find(x => x !== id && map.nodes[x]);
+      const x = other ? map.nodes[other].x : maxX + 950, y = other ? map.nodes[other].y + 1150 : minY + 150;
+      put(`nodes/${id}`, { id, name:d.name, sec:d.sec, region:d.region, cls:d.cls, stargates:d.stargates || [], x, y, notes:'', sigs:[], hub:true });
+    }catch(e){}
+  }
+}
 /* Place les sorties en étoile autour du hub, sans chevauchement */
 function hubSpot(hubId, i, total){
   const h = map.nodes[hubId];
@@ -1065,6 +1098,35 @@ function hubSpot(hubId, i, total){
     if (!taken(x, y)) return { x, y };
   }
   return freeSpot(hubId);
+}
+/* ---------- Navigation : ma position, home, EXIT ---------- */
+function setExit(id){
+  const n = map.nodes[id]; if (!n) return;
+  if (!canEdit()){ readOnlyToast(); return; }
+  put('exit', { id:n.id, name:n.name, by:tok ? tok.charName : '', t:Date.now() });
+  lastSelKey = ''; toast(`EXIT défini sur ${n.name}.`);
+}
+function renderNav(){
+  const ex = map.exit && map.nodes[map.exit.id] ? map.exit : null;
+  const b = $('#btnExit');
+  b.textContent = ex ? `EXIT : ${ex.name}` : 'EXIT';
+  b.classList.toggle('set', !!ex);
+  b.title = ex ? `Centrer sur l'EXIT (${ex.name}) et montrer le chemin de retour${ex.by ? ' · défini par ' + ex.by : ''}` : 'Définir l\'EXIT sur votre système actuel';
+  $('#btnExitSet').hidden = !ex;
+  const h = $('#btnHome');
+  h.textContent = cfg.home ? `⌂ ${cfg.home.name}` : '⌂ Home';
+  h.title = cfg.home ? `Centrer la carte sur ${cfg.home.name}` : 'Définir votre système maison (Réglages)';
+}
+function exitHere(){
+  if (me.current == null || !map.nodes[me.current]){ toast('Position de votre personnage inconnue : connectez-vous avec EVE.', true); return; }
+  setExit(me.current);
+}
+async function gotoSystem(id, label){
+  if (!map.nodes[id]){
+    if (!canEdit()){ toast(`${label} n'est pas sur cette carte et vous êtes en lecture seule.`, true); return; }
+    try{ await ensureNode(id, map.nodes[me.current] ? me.current : null); }catch(e){ toast('Impossible d\'ajouter ' + label + ' : ' + e.message, true); return; }
+  }
+  focusSystem(id);
 }
 async function gotoHub(key){
   const hub = HUB[key];
@@ -1635,7 +1697,7 @@ function whoSpans(textEl, items, prefix){
   });
 }
 let hubSyncT = null;
-function renderAll(){ render(); renderLog(); renderPilot(); renderPilots(); renderExits(); renderKillAlarms(); renderHubCard(); clearTimeout(hubSyncT); hubSyncT = setTimeout(syncHubLinks, 1500); }
+function renderAll(){ renderNav(); render(); renderLog(); renderPilot(); renderPilots(); renderExits(); renderKillAlarms(); renderHubCard(); clearTimeout(hubSyncT); hubSyncT = setTimeout(syncHubLinks, 1500); }
 function render(){
   const vol = cfg.view === 'vol';
   $('#map').toggleAttribute('hidden', vol); $('#vol').toggleAttribute('hidden', !vol); $('#volHint').hidden = !vol;
@@ -1683,6 +1745,7 @@ function render(){
     el('rect', { width:5, height:NH, rx:2, fill:c.color }, g);
     const nm = el('text', { x:14, y:22, class:'nm' }, g); nm.textContent = n.name;
     const cl = el('text', { x:NW - 10, y:19, 'text-anchor':'end', class:'cls', fill:c.color }, g); cl.textContent = c.label;
+    if (map.exit && String(map.exit.id) === String(n.id)){ const tg = el('g', { class:'exittag', transform:`translate(${NW - 44} ${NH - 4})` }, g); el('rect', { width:40, height:15, rx:3 }, tg); const tt = el('text', { x:20, y:11, 'text-anchor':'middle' }, tg); tt.textContent = 'EXIT'; }
     const ws = whData.systems[n.id];
     const sub = el('text', { x:14, y:39, class:'sub' }, g);
     if (isJ(n.cls) && ws && ws.st.length) sub.textContent = ws.st.map(s => `${s}→${destTxt(typeInfo(s))}`).join(' ');
@@ -1862,6 +1925,7 @@ function renderVolume(){
     const t = el('text', { x:p.x, y:p.y + rad + fs + 2, 'text-anchor':'middle', class:'vname', 'font-size':fs }, g); t.textContent = n.name;
     const ws = whData.systems[n.id];
     const sub = [c.label]; if (ws && ws.st && ws.st.length) sub.push(ws.st.join(' ')); if (ws && ws.eff) sub.push(ws.eff.replace(' Star', ''));
+    if (map.exit && String(map.exit.id) === String(it.id)) sub.unshift('EXIT');
     const t2 = el('text', { x:p.x, y:p.y + rad + fs * 2 + 2, 'text-anchor':'middle', class:'vcls', 'font-size':Math.max(9, fs * 0.62), fill:c.color }, g); t2.textContent = sub.join(' · ');
     if (mineV.length || pilotsBySys[it.id]){
       const w = el('text', { x:p.x, y:p.y - rad - 8, 'text-anchor':'middle', class:'who', 'font-size':11 }, g);
@@ -2065,10 +2129,17 @@ function renderNodePanel(box){
       <button type="button" class="small" id="nSigClear">Tout effacer</button>
     </div>
     ${sigRows ? `<table><thead><tr><th>ID</th><th>Groupe</th><th>Type</th><th class="r">%</th></tr></thead><tbody>${sigRows}</tbody></table>` : '<span class="empty">Aucune signature enregistrée.</span>'}
+    <h3>Sortie (EXIT)</h3>
+    <div class="row">${map.exit && String(map.exit.id) === String(n.id)
+      ? '<span class="exitbtn set" style="padding:5px 10px;border:1px solid;border-radius:3px">EXIT actuel</span><button type="button" class="small" id="nExitClear">Retirer l\'EXIT</button>'
+      : '<button type="button" class="exitbtn" id="nExitSet">Définir comme EXIT</button>'}</div>
     <h3>Relier à un autre système</h3>
     ${linkPick ? `<div class="box res"><b>Cliquez maintenant sur le 2e système</b> de la carte.<br><span class="dim">Échap pour annuler.</span></div>` : ''}
     <div class="row"><button type="button" id="nPick"${linkPick ? ' disabled' : ''}>Sélectionner un 2e système</button><span class="note">ou Ctrl + clic sur l'autre système</span></div>
     <div class="row"><button type="button" class="danger" id="nDel">Retirer ce système</button></div>`;
+  const ex1 = $('#nExitSet'), ex2 = $('#nExitClear');
+  if (ex1) ex1.addEventListener('click', () => setExit(n.id));
+  if (ex2) ex2.addEventListener('click', () => { put('exit', null); lastSelKey = ''; toast('EXIT retiré.'); });
   $('#nPick').addEventListener('click', () => { linkPick = true; lastSelKey = ''; renderSel(); toast('Cliquez sur le 2e système de la carte.'); });
   let nt = null;
   $('#nNotes').addEventListener('input', e => { const v = e.target.value; clearTimeout(nt); nt = setTimeout(() => put(`nodes/${n.id}/notes`, v), 500); });
@@ -2394,6 +2465,10 @@ $('#addForm').addEventListener('submit', async ev => {
 });
 $('#btnDemo').addEventListener('click', startDemo);
 $('#btnThera').addEventListener('click', () => gotoHub('thera'));
+$('#btnHere').addEventListener('click', () => { if (me.current != null && map.nodes[me.current]) focusSystem(me.current); else toast('Position de votre personnage inconnue : connectez-vous avec EVE.', true); });
+$('#btnHome').addEventListener('click', () => { if (!cfg.home){ openSetup(); $('#homeName').focus(); toast('Indiquez votre système maison, puis Enregistrer.'); return; } gotoSystem(cfg.home.id, cfg.home.name); });
+$('#btnExit').addEventListener('click', () => { const ex = map.exit && map.nodes[map.exit.id]; if (!ex){ exitHere(); return; } focusSystem(ex.id); fitRoute(currentRoute()); });
+$('#btnExitSet').addEventListener('click', exitHere);
 $('#btnTurnur').addEventListener('click', () => gotoHub('turnur'));
 document.querySelectorAll('#hubCard [data-htab]').forEach(b => b.addEventListener('click', () => { hubTab = b.dataset.htab; hubOpen = null; renderHubCard(); }));
 $('#btnCenter').addEventListener('click', () => { if (cfg.view === 'vol'){ vcam = { yaw:-0.5, pitch:0.95, k:1, px:0, py:0 }; renderVolume(); } else center(); });
@@ -2403,7 +2478,7 @@ $('#zout').addEventListener('click', () => { if (cfg.view === 'vol'){ vcam.k = M
 $('#btnClear').addEventListener('click', () => {
   const b = $('#btnClear');
   if (b.dataset.confirm){
-    put('nodes', null); put('links', null); put('log', null);
+    put('nodes', null); put('links', null); put('log', null); put('exit', null);
     me.current = null; saveMe(); sel = null; lastSelKey = '';
     b.textContent = 'Vider la carte'; delete b.dataset.confirm; return;
   }
