@@ -237,7 +237,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v2.8</span>
+  <span class="ver" id="appVersion" title="Map version">v3.0</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -650,7 +650,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '2.8';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '3.0';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -1214,17 +1214,16 @@ function markHere(kind){
   if (me.current == null || !map.nodes[me.current]){ toast('Your character\'s location is unknown: log in with EVE.', true); return; }
   setMark(kind, me.current);
 }
+// Button: first click sets it on your current system, clicking again removes it
 function clickMark(kind){
-  const m = markOf(kind);
-  if (!m){ markHere(kind); return; }
-  focusSystem(m.id); fitRoute(currentRoute());
+  if (markOf(kind)) clearMark(kind); else markHere(kind);
 }
 function renderNav(){
   for (const kind of Object.keys(MARKS)){
     const M = MARKS[kind], m = markOf(kind), b = $(M.btn);
     b.textContent = m ? `${M.label}: ${m.name}` : M.label;
     b.classList.toggle('set', !!m);
-    b.title = m ? `Center on ${M.label} (${m.name}) and highlight the ${M.what} from your position${m.by ? ' · set by ' + m.by : ''}` : `Set ${M.label} to your current system`;
+    b.title = m ? `${M.label} is ${m.name}${m.by ? ' (set by ' + m.by + ')' : ''}. Click to remove it.` : `Set ${M.label} to your current system`;
     $(M.pin).hidden = !m;
   }
   const h = $('#btnHome');
@@ -1306,8 +1305,8 @@ function renderHubCard(){
   const now = Date.now();
   if (hubTab === 'hubs'){
     const dests = HUB_TRADE();
-    box.innerHTML = `<p class="note">Routes from ${origin ? `<b>${esc(origin)}</b>` : 'your location'}: by stargates, or through Thera or Turnur. A wormhole jump counts as 1.</p>
-      <div class="row"><button type="button" class="small" id="hubCalcRoutes"${hubBusy || !origin ? ' disabled' : ''}>${hubBusy ? 'Calculating…' : 'Calculate routes'}</button>${origin ? '' : '<span class="note">Log in a character that is on the map.</span>'}</div>
+    box.innerHTML = `<p class="note">Routes from ${origin ? `<b>${esc(origin)}</b> (your current system, updated after each jump)` : 'your location'}: by stargates, or through Thera or Turnur. A wormhole jump counts as 1.</p>
+      <div class="row"><button type="button" class="small" id="hubCalcRoutes"${hubBusy || !origin ? ' disabled' : ''}>${hubBusy ? 'Calculating…' : 'Recalculate'}</button>${origin ? '' : '<span class="note">Log in a character that is on the map.</span>'}</div>
       ${hubRoutes ? `<table class="htable"><thead><tr><th>Hub</th><th class="r">Gates</th><th class="r">Via Thera</th><th class="r">Via Turnur</th></tr></thead><tbody>${dests.map(d => {
         const r = hubRoutes[d.id] || {}; const vals = [r.direct, r.thera, r.turnur].map(x => x ? x.cost : null);
         const min = Math.min(...vals.filter(v => v != null));
@@ -1320,46 +1319,69 @@ function renderHubCard(){
     const onMap = !!map.nodes[hub.id];
     const reach = hubCalc['hub' + hub.id];
     box.innerHTML = `<div class="row"><button type="button" class="small" id="hubGo">${onMap ? 'Center on ' + hub.name : 'Add ' + hub.name + ' to the map'}</button>
-        <button type="button" class="small" id="hubCalcJ"${hubBusy || !origin ? ' disabled' : ''}>${hubBusy ? 'Calculating…' : 'Calculate jumps'}</button></div>
+        <button type="button" class="small" id="hubCalcJ"${hubBusy || !origin ? ' disabled' : ''}>${hubBusy ? 'Calculating…' : 'Recalculate'}</button></div>
+      ${origin ? `<p class="note">Jumps counted from <b>${esc(origin)}</b>${who ? ' (' + esc(who) + ')' : ''}, your current system. Updated after each jump.</p>` : '<p class="note">Log in a character that is on the map to count the jumps.</p>'}
       ${reach !== undefined ? `<div class="routebox">${reach ? `Reach <b>${hub.name}</b> from ${esc(who || origin)}: <b>${reach.cost} jump${reach.cost > 1 ? 's' : ''}</b><div class="legs">${reach.legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>` : `No route found to ${hub.name} from your location.`}</div>` : ''}
       ${conns.length ? `<table class="htable"><thead><tr><th>Exit</th><th>Size</th><th>Left</th><th class="r">Jumps</th></tr></thead><tbody>${conns.map(c => {
         const rem = c.expires ? (c.expires - now) / 60000 : null;
         const j = hubCalc[c.sid]; const open = hubOpen === c.sid;
         return `<tr class="clk${open ? ' open' : ''}" data-hopen="${esc(c.sid)}"><td><b>${esc(c.name)}</b> <span class="dim">${esc(String(c.cls).toUpperCase())}</span><br><span class="dim">${esc(c.region)}</span></td><td class="mono">${esc(c.size)}</td>
           <td class="mono ${rem != null && rem < 240 ? 'exp-eol' : rem != null && rem < 480 ? 'exp-soon' : ''}">${rem != null ? fmtDur(rem) : '?'}</td>
-          <td class="r mono">${j === undefined ? '·' : j ? j.cost : '–'}</td></tr>${open ? `<tr><td colspan="4"><div class="legs"><span>Signatures: ${esc(c.outSig || '?')} (${hub.name}) → ${esc(c.inSig || '?')} (${esc(c.name)})${c.wh ? ' · type ' + esc(c.wh) : ''}</span>${j ? `<b>From your location: ${j.cost} jumps</b>${j.legs.map(l => `<span>${esc(l)}</span>`).join('')}` : j === null ? '<span>No known route from your location.</span>' : '<span>Click "Calculate jumps".</span>'}</div>${map.nodes[c.sys] ? `<button type="button" class="small" data-hfocus="${c.sys}">Show on map</button>` : ''}</td></tr>` : ''}`;
+          <td class="r mono">${j === undefined ? '·' : j ? j.cost : '–'}</td></tr>${open ? `<tr><td colspan="4"><div class="legs"><span>Signatures: ${esc(c.outSig || '?')} (${hub.name}) → ${esc(c.inSig || '?')} (${esc(c.name)})${c.wh ? ' · type ' + esc(c.wh) : ''}</span>${j ? `<b>From your location: ${j.cost} jumps</b>${j.legs.map(l => `<span>${esc(l)}</span>`).join('')}` : j === null ? '<span>No known route from your location.</span>' : '<span>Calculating…</span>'}</div>${map.nodes[c.sys] ? `<button type="button" class="small" data-hfocus="${c.sys}">Show on map</button>` : ''}</td></tr>` : ''}`;
       }).join('')}</tbody></table>` : '<span class="empty">No published connection right now.</span>'}
       <p class="note">Updated ${fmtDur((now - hubData.t) / 60000)} ago. Click an exit for details.</p>`;
     $('#hubGo').addEventListener('click', () => gotoHub(hubTab));
-    $('#hubCalcJ').addEventListener('click', async () => {
-      hubBusy = true; renderHubCard();
-      try{
-        const r = await reachHub(hub.id); hubCalc['hub' + hub.id] = r;
-        const ks = conns.filter(c => isKcls(c.cls));
-        const rs = await pool(ks.map(c => async () => ({ c, r:await reachK(c.sys) })));
-        for (const { c, r } of rs) hubCalc[c.sid] = r ? r : null;
-        for (const c of conns.filter(c => !isKcls(c.cls))){ const p = me.current != null && map.nodes[c.sys] ? findPath(me.current, c.sys) : null; hubCalc[c.sid] = p && !p.none ? { cost:p.ids.length - 1, legs:[`Map: ${p.ids.map(nm).join(' → ')}`] } : (r ? { cost:r.cost + 1, legs:[...r.legs, `Wormhole: ${hub.name} → ${c.name}`] } : null); }
-      }catch(e){ toast('Calculation failed: ' + e.message, true); }
-      hubBusy = false; renderHubCard();
-    });
+    $('#hubCalcJ').addEventListener('click', () => calcHubJumps(hubTab, true));
   }
   box.querySelectorAll('[data-hopen]').forEach(tr => tr.addEventListener('click', () => { hubOpen = hubOpen === tr.dataset.hopen ? null : tr.dataset.hopen; renderHubCard(); }));
   box.querySelectorAll('[data-hfocus]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); focusSystem(b.dataset.hfocus); }));
   const cr = $('#hubCalcRoutes');
-  if (cr) cr.addEventListener('click', async () => {
-    hubBusy = true; renderHubCard();
-    try{
-      const res = {};
-      const [toThera, toTurnur] = [await reachHub(HUB.thera.id), await reachHub(HUB.turnur.id)];
-      for (const d of HUB_TRADE()){
-        const direct = await reachK(d.id);
-        const [lt, lu] = [await leaveHub(HUB.thera.id, d.id), await leaveHub(HUB.turnur.id, d.id)];
-        res[d.id] = { direct, thera:toThera && lt ? { cost:toThera.cost + lt.cost, legs:[...toThera.legs, ...lt.legs] } : null, turnur:toTurnur && lu ? { cost:toTurnur.cost + lu.cost, legs:[...toTurnur.legs, ...lu.legs] } : null };
-      }
-      hubRoutes = res;
-    }catch(e){ toast('Calculation failed: ' + e.message, true); }
-    hubBusy = false; renderHubCard();
-  });
+  if (cr) cr.addEventListener('click', () => calcHubRoutes(true));
+  // Automatic: always from the system your character is in now, recalculated after each jump
+  if (!hubBusy && origin){
+    const key = calcKey();
+    if (hubTab === 'hubs' ? hubRoutesFor !== key : hubCalcFor[hubTab] !== key){
+      clearTimeout(hubAutoT); hubAutoT = setTimeout(() => hubTab === 'hubs' ? calcHubRoutes(false) : calcHubJumps(hubTab, false), 400);
+    }
+  }
+}
+let hubCalcFor = {}, hubRoutesFor = '', hubAutoT = null;
+const calcKey = () => `${me.current}|${hubData.t}|${Object.keys(map.links).length}`;
+async function calcHubJumps(key, manual){
+  const hub = HUB[key]; if (!hub || hubBusy) return;
+  const conns = hubConns(hub.id), stamp = calcKey();
+  hubBusy = true; renderHubCard();
+  const res = {};
+  try{
+    const r = await reachHub(hub.id); res['hub' + hub.id] = r;
+    const ks = conns.filter(c => isKcls(c.cls));
+    const rs = await pool(ks.map(c => async () => ({ c, r:await reachK(c.sys) })));
+    for (const { c, r:rk } of rs){
+      const viaHub = r ? { cost:r.cost + 1, legs:[...r.legs, `Wormhole: ${hub.name} → ${c.name} (sig ${c.outSig || '?'})`] } : null;
+      res[c.sid] = rk && (!viaHub || rk.cost <= viaHub.cost) ? rk : viaHub;
+    }
+    for (const c of conns.filter(c => !isKcls(c.cls))){ const p = me.current != null && map.nodes[c.sys] ? findPath(me.current, c.sys) : null; res[c.sid] = p && !p.none ? { cost:p.ids.length - 1, legs:[`Map: ${p.ids.map(nm).join(' → ')}`] } : (r ? { cost:r.cost + 1, legs:[...r.legs, `Wormhole: ${hub.name} → ${c.name}`] } : null); }
+    // drop results of the other hub's previous position, keep this hub's fresh ones
+    for (const c of conns) delete hubCalc[c.sid];
+    Object.assign(hubCalc, res); hubCalcFor[key] = stamp;
+  }catch(e){ if (manual) toast('Calculation failed: ' + e.message, true); hubCalcFor[key] = stamp; }
+  hubBusy = false; renderHubCard();
+}
+async function calcHubRoutes(manual){
+  if (hubBusy) return;
+  const stamp = calcKey();
+  hubBusy = true; renderHubCard();
+  try{
+    const res = {};
+    const [toThera, toTurnur] = [await reachHub(HUB.thera.id), await reachHub(HUB.turnur.id)];
+    for (const d of HUB_TRADE()){
+      const direct = await reachK(d.id);
+      const [lt, lu] = [await leaveHub(HUB.thera.id, d.id), await leaveHub(HUB.turnur.id, d.id)];
+      res[d.id] = { direct, thera:toThera && lt ? { cost:toThera.cost + lt.cost, legs:[...toThera.legs, ...lt.legs] } : null, turnur:toTurnur && lu ? { cost:toTurnur.cost + lu.cost, legs:[...toTurnur.legs, ...lu.legs] } : null };
+    }
+    hubRoutes = res;
+  }catch(e){ if (manual) toast('Calculation failed: ' + e.message, true); }
+  hubRoutesFor = stamp; hubBusy = false; renderHubCard();
 }
 const HUB_TRADE = () => HUBS.concat(cfg.home ? [cfg.home] : []);
 async function loadActivity(){
