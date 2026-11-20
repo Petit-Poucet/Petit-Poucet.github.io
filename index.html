@@ -228,6 +228,8 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 .plist{display:grid;gap:2px;font-size:13px}
 .prow{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:5px 6px;border-radius:3px}
 .prow:hover{background:var(--panel-2)}
+.pname{display:flex;align-items:center;gap:6px;min-width:0}
+.evebadge{font-family:var(--mono);font-size:9.5px;font-weight:800;letter-spacing:.06em;color:#06210f;background:var(--ok);border-radius:3px;padding:1px 4px;line-height:1.3;box-shadow:0 0 6px rgba(76,201,122,.5)}
 .prow.off{opacity:.55}
 .plink{background:none;border:0;padding:0;font:inherit;font-weight:600;color:var(--accent);cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:rgba(242,167,75,.4);text-underline-offset:3px}
 .plink:hover{text-decoration-color:var(--accent)}
@@ -253,7 +255,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v5.4</span>
+  <span class="ver" id="appVersion" title="Map version">v5.6</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -299,7 +301,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
       <button type="button" class="mphead" id="mpToggle" aria-expanded="true" aria-controls="mpList">Pilots <span id="mpCount" class="mono"></span><span class="chev" aria-hidden="true">▾</span></button>
       <div id="mpList" class="plist"></div>
       <div id="mpOffWrap" hidden>
-        <button type="button" class="mpsub" id="mpOffToggle" aria-expanded="false" aria-controls="mpOff">Offline <span id="mpOffCount"></span><span class="chev" aria-hidden="true">▾</span></button>
+        <button type="button" class="mpsub" id="mpOffToggle" aria-expanded="false" aria-controls="mpOff">Map closed <span id="mpOffCount"></span><span class="chev" aria-hidden="true">▾</span></button>
         <div id="mpOff" class="plist" hidden></div>
       </div>
     </div>
@@ -482,7 +484,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '5.4';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '5.6';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -724,7 +726,7 @@ async function connectShared(){
   renderLock();
   let firstData = true;
   const open = (sub, apply) => {
-    const es = new EventSource(`${mapBase()}/${sub}.json?auth=${encodeURIComponent(fb.idToken)}`);
+    const es = new EventSource(`${mapBase()}${sub ? '/' + sub : ''}.json?auth=${encodeURIComponent(fb.idToken)}`);
     es.addEventListener('put', ev => { const { path, data } = JSON.parse(ev.data); apply(path, data); setSync('on', liveLabel()); persistLocal(); scheduleRender(); });
     es.addEventListener('patch', ev => {
       const { path, data } = JSON.parse(ev.data);
@@ -736,7 +738,7 @@ async function connectShared(){
     es.onerror = () => setSync('err', 'Sharing: reconnecting…');
     streams.push(es);
   };
-  open('data', (path, data) => {
+  const onData = (path, data) => {
     if (path === '/'){
       if (firstData && !data && myRole === 'owner'){
         const local = normalize(store.get(K.map, null));
@@ -752,23 +754,41 @@ async function connectShared(){
       map.nodes = d.nodes || {}; map.links = d.links || {}; map.log = d.log || {}; map.exit = d.exit || null; map.enter = d.enter || null;
     } else setAt(map, path.slice(1).split('/'), data);
     map = normalize(map);
-  });
-  open('pilots', (path, data) => {
+  };
+  const onPilots = (path, data) => {
     if (path === '/') map.pilots = data || {};
     else setAt(map.pilots, path.slice(1).split('/'), data);
     // our own record comes back stamped by the server: measure the gap between server time and this PC's clock
     const mineRec = map.pilots[fb.uid];
     if (mineRec && typeof mineRec.t === 'number' && (path === '/' || path.startsWith('/' + fb.uid))){ const off = mineRec.t - Date.now(); if (Math.abs(off) < 24 * 3600e3 && Math.abs(Date.now() - lastPilotPub) < 20000) srvOffset = off; }
-  });
+  };
   // Pour un invité : suit son propre droit en direct (changement de droit ou retrait)
+  let onAcl = null;
   if (myRole !== 'owner'){
-    open(`acl/${fb.uid}`, (path, data) => {
+    onAcl = (path, data) => {
       if (path === '/' && data) myMulti = data.multi === true;
       if (path === '/multi'){ const before = myMulti; myMulti = data === true; if (before !== myMulti){ toast(myMulti ? 'You can now track several characters on this map.' : 'Multi-character tracking was turned off for you on this map.'); publishPilot(true); renderPilot(); } }
       const role = path === '/' ? (data && data.role) : (path === '/role' ? data : undefined);
       if (path === '/' && !data){ setSync('err', 'Access removed'); toast('The owner of this map removed your access.', true); streams.forEach(x => x.close()); return; }
       if (role !== undefined){ const before = myRole; myRole = role === 'edit' ? 'edit' : 'view'; if (before !== myRole){ toast(myRole === 'edit' ? 'You can now edit this map.' : 'Your access is now read only.'); lastSelKey = ''; } }
+    };
+  }
+  // ONE connection per tab when the database rules allow reading the whole map; otherwise the older 2-3 connections
+  let single = false;
+  try{ const r = await fetch(`${mapBase()}.json?shallow=true&auth=${encodeURIComponent(fb.idToken)}`); single = r.ok; }catch(e){}
+  streamMode = single ? 'single' : 'legacy';
+  if (single){
+    open('', (path, data) => {
+      if (path === '/'){ const d = data || {}; onData('/', d.data ?? null); onPilots('/', d.pilots ?? null); if (onAcl) onAcl('/', (d.acl || {})[fb.uid] ?? null); return; }
+      const parts = path.slice(1).split('/'), head = parts[0];
+      if (head === 'data' || head === 'pilots'){ const rest = '/' + parts.slice(1).join('/'); (head === 'data' ? onData : onPilots)(rest, data); }
+      else if (head === 'acl' && onAcl){
+        if (parts.length === 1) onAcl('/', (data || {})[fb.uid] ?? null);
+        else if (parts[1] === fb.uid) onAcl('/' + parts.slice(2).join('/'), data);
+      }
     });
+  } else {
+    open('data', onData); open('pilots', onPilots); if (onAcl) open(`acl/${fb.uid}`, onAcl);
   }
   // Renouvelle le jeton et les flux avant expiration (jetons Firebase : 1 h)
   reconnectT = setTimeout(connectShared, Math.max(60000, fb.exp - Date.now() - 180000));
@@ -858,7 +878,7 @@ async function gateConnected(a, b){
 }
 const gateStore = store.get('whmap.gates', {});   // les routes par portes ne changent pas : cache permanent
 let gateSaveT = null;
-let routeFails = 0;
+let routeFails = 0, esiPauseUntil = 0;
 async function routeJumps(origin, dest, pref){
   if (String(origin) === String(dest)) return 0;
   const safe = pref === 'safe', nohub = pref === 'nohub';
@@ -867,17 +887,20 @@ async function routeJumps(origin, dest, pref){
   const key = tag + origin + '>' + dest;
   if (key in gateStore) return gateStore[key];
   if (routeCache.has(key)) return routeCache.get(key);
-  let ids = null;
-  for (let attempt = 0; attempt < 3 && !ids; attempt++){
-  if (attempt) await new Promise(res => setTimeout(res, 800 * attempt));   // CCP may refuse bursts of requests: wait and retry
-  try{
-    const r = await fetch(`${ESI_ROOT}/route/${origin}/${dest}`, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Compatibility-Date':'2025-09-30' }, body:JSON.stringify(nohub ? { preference:'Shorter', avoid_systems:[HUB.turnur.id] } : { preference:safe ? 'Safer' : 'Shorter' }) });
-    if (r.ok){ const j = await r.json(); ids = Array.isArray(j) ? j : (j.route || j.systems || null); }
-  }catch(e){}
-  if (!ids){
-    try{ const r = await fetch(`${ESI}/route/${origin}/${dest}/?flag=${safe ? 'secure' : 'shortest'}${nohub ? '&avoid=' + HUB.turnur.id : ''}`); if (r.ok) ids = await r.json(); }catch(e){}
+  let ids = null, hardFail = false;
+  for (let attempt = 0; attempt < 3 && !ids && !hardFail; attempt++){
+    if (Date.now() < esiPauseUntil) await new Promise(res => setTimeout(res, esiPauseUntil - Date.now()));
+    if (attempt) await new Promise(res => setTimeout(res, 1000 * attempt));
+    try{
+      const body = { preference:safe ? 'Safer' : 'Shorter' }; if (nohub) body.avoid_systems = [HUB.turnur.id];
+      const r = await fetch(`${ESI_ROOT}/route/${origin}/${dest}`, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Compatibility-Date':'2025-09-30' }, body:JSON.stringify(body) });
+      const remain = Number(r.headers.get('X-ESI-Error-Limit-Remain'));
+      if (r.status === 420 || (remain && remain < 20)) esiPauseUntil = Date.now() + 60000;   // CCP is about to block us: stop for a minute
+      if (r.ok){ const j = await r.json(); ids = Array.isArray(j) ? j : (j.route || j.systems || null); }
+      else if (r.status >= 400 && r.status < 500 && r.status !== 420 && r.status !== 429) hardFail = true;   // a refused request is never retried
+    }catch(e){}
   }
-  }
+  if (hardFail){ routeCache.set(key, null); routeFails++; return null; }
   if (nohub && Array.isArray(ids) && ids.map(Number).includes(HUB.turnur.id)) ids = null;   // CCP ignored the avoid list: not a valid answer
   const n = Array.isArray(ids) ? Math.max(0, ids.length - 1) : null;
   if (n == null){ routeFails++; return null; }   // a failure is never remembered: next calculation asks again
@@ -1519,7 +1542,7 @@ function lockedRules(owner){
   return JSON.stringify({ rules:{ '.read':false, '.write':false,
     owners:{ '.read':`auth != null && auth.uid === ${S}`,
       $uid:{ '.read':`auth != null && ($uid === auth.uid || auth.uid === ${S})`, '.write':`auth != null && auth.uid === ${S}` } },
-    maps:{ $owner:{
+    maps:{ $owner:{ '.read':MEMBER,
       ownerName:{ '.read':MEMBER, '.write':`auth != null && $owner === auth.uid && ${isMO('auth.uid')}` },
       acl:{ '.read':`auth != null && ($owner === auth.uid || data.child(auth.uid).exists())`, '.write':`auth != null && $owner === auth.uid && ${isMO('auth.uid')}`,
         $uid:{ '.validate':`$owner === ${S} || (newData.child('slot').isNumber() && newData.child('slot').val() >= 1 && newData.child('slot').val() <= ${MAX} - 1 && newData.parent().parent().child('slots').child(newData.child('slot').val() + '').val() === $uid)` } },
@@ -1737,7 +1760,7 @@ function publishPilot(force){
   remote('PUT', `pilots/${fb.uid}`, { ...rec, t:{ '.sv':'timestamp' } });
   scheduleRender();
 }
-let srvOffset = 0;   // Firebase server time minus this PC's time
+let srvOffset = 0, streamMode = '';   // Firebase server time minus this PC's time
 const srvNow = () => Date.now() + srvOffset;
 
 async function ensureNode(id, nearId, info){
@@ -1963,17 +1986,18 @@ function activePilots(){
     const age = now - (p.t || 0);
     if (age > 24 * 3600e3 && !demoMode) continue;             // au-delà de 24 h on n'affiche plus
     const fresh = demoMode || age < 3 * 60000;                // onglet fermé depuis plus de 3 min = déconnecté
-    const why = (online) => online && fresh ? '' : !online ? 'Character not in game (EVE client offline)' : `Map not updated for ${fmtDur(age / 60000)} (tab closed, PC asleep, or old map version)`;
-    out.push(Object.assign({ id }, p, { alts:undefined, live:!!p.online && fresh, why:why(!!p.online) }));
-    if (p.alts) for (const k in p.alts){ const a = p.alts[k]; if (!a || seen.has(String(k))) continue; seen.add(String(k)); if (a) out.push({ id:id + '-' + k, name:a.name, sys:a.sys, ship:a.ship, online:!!a.online, live:!!a.online && fresh, t:p.t, altOf:p.name, why:why(!!a.online) }); }
+    // green = map open (news less than 3 min old) · EVE logo = character connected in the game
+    const why = fresh ? '' : `Map not open (last news ${fmtDur(age / 60000)} ago)`;
+    out.push(Object.assign({ id }, p, { alts:undefined, live:fresh, ingame:!!p.online && fresh, why }));
+    if (p.alts) for (const k in p.alts){ const a = p.alts[k]; if (!a || seen.has(String(k))) continue; seen.add(String(k)); if (a) out.push({ id:id + '-' + k, name:a.name, sys:a.sys, ship:a.ship, online:!!a.online, live:fresh, ingame:!!a.online && fresh, t:p.t, altOf:p.name, why }); }
   }
   return out;
 }
 function mineAt(sysId){
   const names = [];
   // Sur la carte, seuls les personnages en jeu sont affichés (les déconnectés restent dans le panneau de gauche)
-  if (me.current != null && String(me.current) === String(sysId) && (pilot.online || demoMode)) names.push({ name:tok ? tok.charName : 'Vous', live:true });
-  if (canMulti()) for (const a of myAltsInfo()) if (a.online && a.sys != null && String(a.sys) === String(sysId)) names.push({ name:a.name, live:true });
+  if (me.current != null && String(me.current) === String(sysId) && (tok || demoMode)) names.push({ name:tok ? tok.charName : 'You', live:true });
+  if (canMulti()) for (const a of myAltsInfo()) if (a.sys != null && String(a.sys) === String(sysId)) names.push({ name:a.name, live:true });
   return names;
 }
 /* Écrit des noms de pilotes colorés (vert = en jeu, rouge = déconnecté) dans un <text> SVG */
@@ -2747,8 +2771,9 @@ function renderPilot(){
 function renderPilots(){
   // Vos personnages en premier, puis les autres pilotes par nom ; en jeu (vert) en haut, déconnectés (rouge) dans la rubrique repliable
   const list = [];
-  if (tok || demoMode) list.push({ id:'me', name:(tok ? tok.charName : 'Demo pilot') + ' (you)', sys:me.current, ship:pilot.shipType || pilot.ship, live:!!pilot.online, self:true });
-  if (tok && canMulti()) for (const a of myAltsInfo()) list.push({ id:'alt' + a.charId, name:a.name + ' (you)', sys:a.sys, ship:a.ship, live:!!a.online, self:true });
+  // your own characters are tracked by this open map, so they are always "on the map"
+  if (tok || demoMode) list.push({ id:'me', name:(tok ? tok.charName : 'Demo pilot') + ' (you)', sys:me.current, ship:pilot.shipType || pilot.ship, live:true, ingame:!!pilot.online, self:true });
+  if (tok && canMulti()) for (const a of myAltsInfo()) list.push({ id:'alt' + a.charId, name:a.name + ' (you)', sys:a.sys, ship:a.ship, live:true, ingame:!!a.online, self:true });
   activePilots().sort((a, b) => String(a.name).localeCompare(String(b.name))).forEach(p => list.push(p));
   const others = list.filter(p => !p.self).length;
   const on = list.filter(p => p.live), off = list.filter(p => !p.live);
@@ -2757,13 +2782,13 @@ function renderPilots(){
   const row = (p, full) => {
     const n = p.sys != null ? map.nodes[p.sys] : null;
     return `<div class="prow">
-      <span class="dot ${p.live ? 'on' : 'dead'}" title="${p.live ? 'In game' : esc(p.why || (p.self ? 'Character not in game (EVE client offline)' : 'Offline'))}"></span>
-      <button type="button" class="plink ${p.live ? 'live' : 'dead'}" data-sys="${n ? esc(p.sys) : ''}" ${n ? '' : 'disabled'} title="${(p.live ? '' : esc(p.why || (p.self ? 'Character not in game (EVE client offline)' : 'Offline')) + ' · ') + (n ? 'Center the map on ' + esc(n.name) : 'Not on the map')}">${esc(p.name)}</button>
+      <span class="dot ${p.live ? 'on' : 'dead'}" title="${p.live ? 'Map open' : esc(p.why || 'Map not open')}"></span>
+      <span class="pname"><button type="button" class="plink ${p.live ? 'live' : 'dead'}" data-sys="${n ? esc(p.sys) : ''}" ${n ? '' : 'disabled'} title="${(p.live ? 'Map open' : esc(p.why || 'Map not open')) + (p.ingame ? ' · in game' : ' · not in game') + ' · ' + (n ? 'Center the map on ' + esc(n.name) : 'Not on the map')}">${esc(p.name)}</button>${p.ingame ? '<span class="evebadge" title="Connected in EVE">EVE</span>' : ''}</span>
       <span class="where">${n ? esc(n.name) : 'off map'}</span>
       ${full && p.ship ? `<span class="ship">${esc(p.ship)}</span>` : ''}
     </div>`;
   };
-  $('#mpList').innerHTML = on.length ? on.map(p => row(p, true)).join('') : '<span class="empty" style="padding:4px 6px">No pilot in game.</span>';
+  $('#mpList').innerHTML = on.length ? on.map(p => row(p, true)).join('') : '<span class="empty" style="padding:4px 6px">Nobody has the map open.</span>';
   $('#mpOffWrap').hidden = !off.length;
   $('#mpOffCount').textContent = `(${off.length})`;
   $('#mpOff').innerHTML = off.map(p => row(p, false)).join('');
@@ -2912,6 +2937,7 @@ function openSetup(){ if (DEMO_ONLY) return;
   $('#lockBox').hidden = !isSiteOwner;
   $('#lockTitle').textContent = SITE_LOCK ? '🔒 Site locked: database rules' : '🔒 Lock this site to my map';
   $('#btnLock').hidden = !!SITE_LOCK;
+  if (streamMode === 'legacy') $('#lockTitle').textContent += ' · update needed (3 connections per tab)';
   $('#cbUrl').textContent = callbackUrl; $('#clientId').value = cfg.clientId || ''; $('#pollSel').value = String(cfg.poll || 5);
   $('#cWorker').value = cfg.cloud.worker || ''; $('#cDb').value = cfg.cloud.db || ''; $('#cKey').value = cfg.cloud.apiKey || '';
   $('#homeName').value = cfg.home ? cfg.home.name : '';
