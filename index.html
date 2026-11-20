@@ -56,6 +56,17 @@ svg#vol.panning{cursor:grabbing}
 #vol .vname{font-family:var(--display);font-weight:700;fill:var(--text);paint-order:stroke;stroke:var(--bg);stroke-width:3px}
 #vol .vcls{font-family:var(--mono);font-weight:500;paint-order:stroke;stroke:var(--bg);stroke-width:3px}
 #vol .vsel{fill:none;stroke:var(--accent);stroke-width:2}
+/* Mise en avant de deux systèmes sélectionnés : le reste de la carte s'estompe */
+#map .node,#map .link,#map .lt,#vol .vnode,#vol .link,#vol .lt,#vol .stem,#vol .shadow,#vol .ring{transition:opacity .25s ease}
+#map.focus .node:not(.pair),#vol.focus .vnode:not(.pair){opacity:.15}
+#map.focus .link:not(.pairlink),#map.focus .lt:not(.pairlink),#vol.focus .link:not(.pairlink),#vol.focus .lt:not(.pairlink){opacity:.08}
+#vol.focus .stem,#vol.focus .shadow{opacity:.12}
+#vol.focus .ring{opacity:.35}
+#map.focus .node.pair rect.box{stroke:var(--accent);stroke-width:3;filter:drop-shadow(0 0 10px rgba(242,167,75,.75))}
+#vol.focus .vnode.pair .vsel{stroke-width:3;filter:drop-shadow(0 0 8px rgba(242,167,75,.9))}
+.preview{stroke:var(--accent);stroke-width:3;stroke-dasharray:9 7;fill:none;pointer-events:none;opacity:.95}
+@media (prefers-reduced-motion:no-preference){.preview{animation:dash 1s linear infinite}}
+@keyframes dash{to{stroke-dashoffset:-16}}
 .hint{position:absolute;right:12px;top:12px;font-size:11.5px;color:var(--dim);background:rgba(14,20,36,.85);border:1px solid var(--line);padding:5px 9px;border-radius:3px}
 .node rect.box{fill:var(--panel);stroke:var(--line);stroke-width:1.2}
 .node.sel rect.box{stroke:var(--accent);stroke-width:2}
@@ -1259,7 +1270,8 @@ function render(){
     if (!a || !b) continue;
     const x1 = a.x + NW/2, y1 = a.y + NH/2, x2 = b.x + NW/2, y2 = b.y + NH/2;
     const isSel = sel && sel.kind === 'link' && sel.id === l.id;
-    const cls = 'link ' + (l.type === 'gate' ? 'gate' : (l.eol ? 'eol ' : '') + l.mass) + (isSel ? ' sel' : '');
+    const pl = isPairLink(l);
+    const cls = 'link ' + (l.type === 'gate' ? 'gate' : (l.eol ? 'eol ' : '') + l.mass) + (isSel ? ' sel' : '') + (pl ? ' pairlink' : '');
     el('line', { x1, y1, x2, y2, class:cls }, gl);
     const hit = el('line', { x1, y1, x2, y2, class:'link-hit' }, gl);
     hit.dataset.link = l.id;
@@ -1271,7 +1283,7 @@ function render(){
       const me_ = massEstimate(l); if (me_ && me_.used) l2.push('reste ≈' + fmtMkg((me_.lo + me_.hi) / 2));
       const lines = [l1.join(' · '), l2.join(' · ')].filter(Boolean);
       lines.forEach((txt, i) => {
-        const t = el('text', { x:(x1 + x2) / 2, y:(y1 + y2) / 2 - 8 - (lines.length - 1 - i) * 12, 'text-anchor':'middle', class:'lt', fill:l.eol ? 'var(--eol)' : '#a9c1e0' }, glab);
+        const t = el('text', { x:(x1 + x2) / 2, y:(y1 + y2) / 2 - 8 - (lines.length - 1 - i) * 12, 'text-anchor':'middle', class:'lt' + (pl ? ' pairlink' : ''), fill:l.eol ? 'var(--eol)' : '#a9c1e0' }, glab);
         t.textContent = txt;
       });
     }
@@ -1282,7 +1294,7 @@ function render(){
     const n = map.nodes[id]; if (!n) continue;
     const c = CLASS[n.cls] || CLASS['?'];
     const mine = mineAt(n.id), here = mine.length > 0;
-    const g = el('g', { class:'node' + (here ? ' here' : '') + (isSelNode(n.id) ? ' sel' : ''), transform:`translate(${n.x} ${n.y})`, tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, gn);
+    const g = el('g', { class:'node' + (here ? ' here' : '') + (isSelNode(n.id) ? ' sel' : '') + (pairMode() && isSelNode(n.id) ? ' pair' : ''), transform:`translate(${n.x} ${n.y})`, tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, gn);
     if (here) el('rect', { x:-4, y:-4, width:NW + 8, height:NH + 8, rx:7, class:'halo' }, g);
     el('rect', { width:NW, height:NH, rx:4, class:'box' }, g);
     el('rect', { width:5, height:NH, rx:2, fill:c.color }, g);
@@ -1304,6 +1316,13 @@ function render(){
     if (pilotsBySys[n.id]){ const w = el('text', { x:NW/2, y:labelY, 'text-anchor':'middle', class:'who other' }, g); w.textContent = pilotsBySys[n.id].join(', '); }
     g.addEventListener('pointerdown', ev => startDrag(ev, n));
     g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); select('node', n.id); } });
+  }
+  // Deux systèmes sélectionnés : estompe le reste et montre la future connexion
+  const pm = pairMode();
+  svg.classList.toggle('focus', pm);
+  if (pm && !linkBetween(sel.id, sel.second)){
+    const a = map.nodes[sel.id], b = map.nodes[sel.second];
+    el('line', { x1:a.x + NW/2, y1:a.y + NH/2, x2:b.x + NW/2, y2:b.y + NH/2, class:'preview' }, gl);
   }
   applyView();
   renderSel();
@@ -1412,6 +1431,9 @@ function renderVolume(){
     el('ellipse', { cx:f.x, cy:f.y, rx:rad, ry:rad * Math.sin(vcam.pitch) * 0.6, class:'shadow' }, scene);
     if (pos[id].y > 0) el('line', { x1:f.x, y1:f.y, x2:p.x, y2:p.y, class:'stem' }, scene);
   }
+  // Deux systèmes sélectionnés : estompe le reste
+  const pmV = pairMode();
+  $('#vol').classList.toggle('focus', pmV);
   // Liens et systèmes triés du plus loin au plus proche
   const items = [];
   for (const l of linksArr()){
@@ -1426,19 +1448,20 @@ function renderVolume(){
     if (it.kind === 'link'){
       const l = it.l, w = Math.max(1.2, 3 * (it.a.s + it.b.s) / 2);
       const isSel = sel && sel.kind === 'link' && sel.id === l.id;
-      const cls = 'link ' + (l.type === 'gate' ? 'gate' : (l.eol ? 'eol ' : '') + l.mass) + (isSel ? ' sel' : '');
+      const pl = isPairLink(l);
+      const cls = 'link ' + (l.type === 'gate' ? 'gate' : (l.eol ? 'eol ' : '') + l.mass) + (isSel ? ' sel' : '') + (pl ? ' pairlink' : '');
       el('line', { x1:it.a.x, y1:it.a.y, x2:it.b.x, y2:it.b.y, class:cls, style:`stroke-width:${w.toFixed(2)}px` }, scene);
       const hit = el('line', { x1:it.a.x, y1:it.a.y, x2:it.b.x, y2:it.b.y, class:'link-hit' }, scene); hit.dataset.link = l.id;
       if (l.type !== 'gate' && (l.wh || l.eol)){
         const li = lifeInfo(l);
-        const t = el('text', { x:(it.a.x + it.b.x) / 2, y:(it.a.y + it.b.y) / 2 - 6, 'text-anchor':'middle', class:'lt', fill:l.eol ? 'var(--eol)' : '#a9c1e0' }, scene);
+        const t = el('text', { x:(it.a.x + it.b.x) / 2, y:(it.a.y + it.b.y) / 2 - 6, 'text-anchor':'middle', class:'lt' + (pl ? ' pairlink' : ''), fill:l.eol ? 'var(--eol)' : '#a9c1e0' }, scene);
         t.textContent = [l.wh, l.eol && li ? li.label : ''].filter(Boolean).join(' · ');
       }
       continue;
     }
     const n = map.nodes[it.id], p = it.p, c = CLASS[n.cls] || CLASS['?'];
     const rad = Math.max(6, 15 * p.s);
-    const g = el('g', { class:'vnode', tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, scene);
+    const g = el('g', { class:'vnode' + (pairMode() && isSelNode(it.id) ? ' pair' : ''), tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, scene);
     g.dataset.node = it.id;
     const mineV = mineAt(it.id);
     if (mineV.length) el('circle', { cx:p.x, cy:p.y, r:rad + 5, class:'halo' }, g);
@@ -1454,6 +1477,10 @@ function renderVolume(){
     if (pilotsBySys[it.id]) who.push(pilotsBySys[it.id].join(', '));
     if (who.length){ const w = el('text', { x:p.x, y:p.y - rad - 8, 'text-anchor':'middle', class:'who' + (who.length === 1 && !String(me.current).length ? ' other' : ''), 'font-size':11 }, g); w.textContent = who.join(' · '); }
     g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); select('node', it.id); } });
+  }
+  if (pmV && !linkBetween(sel.id, sel.second) && P[String(sel.id)] && P[String(sel.second)]){
+    const a = P[String(sel.id)], b = P[String(sel.second)];
+    scene.insertBefore(el('line', { x1:a.x, y1:a.y, x2:b.x, y2:b.y, class:'preview' }), scene.querySelector('.vnode.pair'));
   }
 }
 (() => {
@@ -1537,6 +1564,8 @@ function clickSystem(id, multi){
   }
   select('node', id);
 }
+const pairMode = () => !!(sel && sel.kind === 'node' && sel.second != null && map.nodes[sel.id] && map.nodes[sel.second]);
+const isPairLink = l => pairMode() && ((String(l.a) === String(sel.id) && String(l.b) === String(sel.second)) || (String(l.b) === String(sel.id) && String(l.a) === String(sel.second)));
 const isSelNode = id => sel && sel.kind === 'node' && (String(sel.id) === String(id) || (sel.second != null && String(sel.second) === String(id)));
 let lastSelKey = '';
 function renderSel(){
