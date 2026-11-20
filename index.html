@@ -237,7 +237,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v3.0</span>
+  <span class="ver" id="appVersion" title="Map version">v3.3</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -650,7 +650,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '3.0';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '3.3';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -1168,12 +1168,15 @@ function placeHub(hubId){
     if (d < 1){ dx = 1; dy = 0; } else { dx /= d; dy /= d; }
     x = Math.round(anchor.x + dx * (r + 450)); y = Math.round(anchor.y + dy * (r + 450) * 0.8); place = 'chain';
   } else {
-    const maxX = main.length ? Math.max(...main.map(n => n.x)) : 0, minY = main.length ? Math.min(...main.map(n => n.y)) : 0;
-    const farX = maxX + r + 1600;
-    if (h.place === 'far' && h.x >= farX - 400) return false;
-    const other = HUB_IDS.find(o => o !== Number(hubId) && map.nodes[o] && map.nodes[o].place === 'far');
-    x = Math.round(farX); y = Math.round(other ? Math.max(minY + r, map.nodes[other].y + 2 * r + 1200) : minY + r);
-    if (other && hubId === HUB.thera.id){ y = Math.round(minY + r); }
+    // Thera far to the LEFT of the main map, Turnur far to the RIGHT, both level with its middle
+    const xs = main.map(n => n.x), ys = main.map(n => n.y);
+    const minX = xs.length ? Math.min(...xs) : 0, maxX = xs.length ? Math.max(...xs) : 0;
+    const midY = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0;
+    const left = Number(hubId) === HUB.thera.id;
+    const tx = left ? minX - r - 1600 - NW : maxX + r + 1600;
+    if (h.place === 'far' && h.side === (left ? 'L' : 'R') && (left ? h.x <= tx + 400 : h.x >= tx - 400)) return false;
+    x = Math.round(tx); y = Math.round(midY);
+    h.side = left ? 'L' : 'R';
     place = 'far';
   }
   put(`nodes/${hubId}`, { ...h, x, y, place });
@@ -1477,7 +1480,7 @@ function renderKillAlarms(){
    ========================================================= */
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 function jwt(t){ try{ return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }catch(e){ return {}; } }
-async function login(asAlt){
+async function login(asAlt, askWp){
   if (!cfg.clientId){ openSetup(); toast('Enter your EVE application Client ID first.', true); return; }
   if (location.protocol === 'file:'){ toast('Open the map from its online address (or http://localhost) to log in.', true); return; }
   if (!window.crypto || !crypto.subtle){ toast('This browser blocks login: use an https address or http://localhost.', true); return; }
@@ -1485,26 +1488,39 @@ async function login(asAlt){
   const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
   const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
   try{ sessionStorage.setItem(K.pkce, JSON.stringify({ verifier, state, alt:asAlt === true })); }catch(e){}
-  const p = new URLSearchParams({ response_type:'code', redirect_uri:callbackUrl, client_id:cfg.clientId, scope:SCOPES + (cfg.wantWaypoint ? ' ' + WP_SCOPE : ''), code_challenge:challenge, code_challenge_method:'S256', state });
+  // Every login asks for "Set destination" too. If the last such login never came back (CCP error page:
+  // the scope is not enabled in the EVE app), this one goes without it so the player is never stuck.
+  let lastWp = 0; try{ lastWp = Number(localStorage.getItem('whmap.loginWp') || 0); }catch(e){}
+  const failedWp = lastWp && Date.now() - lastWp < 30 * 60e3;
+  const withWp = askWp || !failedWp;
+  if (withWp){ try{ localStorage.setItem('whmap.loginWp', String(Date.now())); }catch(e){} }
+  else toast('Logging in without "Set destination": enable esi-ui.write_waypoint.v1 in your EVE app to use it.', true);
+  const p = new URLSearchParams({ response_type:'code', redirect_uri:callbackUrl, client_id:cfg.clientId, scope:SCOPES + (withWp ? ' ' + WP_SCOPE : ''), code_challenge:challenge, code_challenge_method:'S256', state });
   location.href = `${SSO}/authorize/?${p}`;
 }
 /* ---------- Set destination in game (ESI autopilot waypoint) ---------- */
 const hasScope = (t, sc) => { const c = jwt((t && t.access_token) || '').scp; return Array.isArray(c) ? c.includes(sc) : c === sc; };
+function wpHelp(){
+  toast('"Set destination" is not allowed by your EVE app yet. On developers.eveonline.com, open your app, tick esi-ui.write_waypoint.v1, save, then log out and log in again with EVE.', true);
+}
 async function setDestination(id, add){
   const n = map.nodes[id], name = (n && n.name) || nm(id);
   if (!tok){ toast('Log in with EVE first.', true); return; }
   if (!isRealId(id)){ toast('This system cannot be sent to the game.', true); return; }
   if (!hasScope(tok, WP_SCOPE)){
-    cfg.wantWaypoint = true; saveCfg();
-    try{ sessionStorage.setItem('whmap.pendDest', JSON.stringify({ id, add:!!add, t:Date.now() })); }catch(e){}
+    // Never loop: if we already went to CCP for this and still have no permission, the app on developers.eveonline.com lacks the scope
+    let tried = 0; try{ tried = Number(localStorage.getItem('whmap.wpTried') || 0); }catch(e){}
+    if (Date.now() - tried < 15 * 60e3){ wpHelp(); return; }
+    try{ localStorage.setItem('whmap.wpTried', String(Date.now())); sessionStorage.setItem('whmap.pendDest', JSON.stringify({ id, add:!!add, t:Date.now() })); }catch(e){}
     toast('One-time step: CCP will ask you to allow "Set destination". Redirecting…');
-    setTimeout(() => login(), 1200); return;
+    setTimeout(() => login(false, true), 1500); return;
   }
+  try{ localStorage.removeItem('whmap.wpTried'); }catch(e){}
   try{
     await ensureToken();
     const q = new URLSearchParams({ add_to_beginning:'false', clear_other_waypoints:String(!add), destination_id:String(id) });
     const r = await fetch(`${ESI}/ui/autopilot/waypoint/?${q}`, { method:'POST', headers:{ Authorization:'Bearer ' + tok.access_token } });
-    if (r.status === 401 || r.status === 403){ cfg.wantWaypoint = true; saveCfg(); toast('CCP refused: log in again to allow "Set destination".', true); return; }
+    if (r.status === 401 || r.status === 403){ cfg.wpOk = false; saveCfg(); toast('CCP refused: log in again to allow "Set destination".', true); return; }
     if (!r.ok) throw new Error('ESI ' + r.status);
     toast(add ? `Waypoint added in game: ${name} (${tok.charName}).` : `Destination set in game: ${name} (${tok.charName}).`);
   }catch(e){ toast('Could not set the destination: ' + e.message + '. Is the character in game?', true); }
@@ -1521,7 +1537,7 @@ async function handleCallback(){
   const q = new URLSearchParams(location.search);
   if (q.get('error')){
     history.replaceState(null, '', callbackUrl);
-    if (/scope/i.test(q.get('error') + ' ' + (q.get('error_description') || ''))){ cfg.wantWaypoint = false; saveCfg(); toast('CCP refused the "Set destination" permission: in your app on developers.eveonline.com, tick esi-ui.write_waypoint.v1, then try again.', true); }
+    if (/scope/i.test(q.get('error') + ' ' + (q.get('error_description') || ''))){ cfg.wpOk = false; delete cfg.wantWaypoint; saveCfg(); try{ sessionStorage.removeItem('whmap.pendDest'); }catch(e){} toast('CCP refused the "Set destination" permission: in your app on developers.eveonline.com, tick esi-ui.write_waypoint.v1, then try again.', true); }
     else toast('Login cancelled by CCP (' + q.get('error') + ').', true);
     return;
   }
@@ -1539,8 +1555,10 @@ async function handleCallback(){
       switchTabChar(t.charId, t);
       toast('Logged in: ' + tok.charName + ' (in this tab)');
     }
+    if (!saved.alt){ cfg.wpOk = hasScope(t, WP_SCOPE); delete cfg.wantWaypoint; saveCfg(); }
+    try{ localStorage.removeItem('whmap.loginWp'); localStorage.removeItem('whmap.wpTried'); }catch(e){}
     let pend = null; try{ pend = JSON.parse(sessionStorage.getItem('whmap.pendDest') || 'null'); sessionStorage.removeItem('whmap.pendDest'); }catch(e){}
-    if (pend && Date.now() - pend.t < 10 * 60e3) setTimeout(() => setDestination(pend.id, pend.add), 1500);
+    if (pend && Date.now() - pend.t < 10 * 60e3){ if (hasScope(tok, WP_SCOPE)) setTimeout(() => setDestination(pend.id, pend.add), 1500); else setTimeout(wpHelp, 1500); }
   }
   catch(e){ toast(e.message, true); }
 }
@@ -2022,12 +2040,16 @@ function volLayout(){
   // Thera / Turnur groups that your chain has not reached are set well apart, after the main chain
   const hubOut = {};
   for (const h of HUB_IDS) if (map.nodes[h]) hubOut[h] = !hubState(h).inChain;
-  comps.forEach(c => { c.apart = HUB_IDS.some(h => hubOut[h] && c.pos[String(h)]); });
-  comps.sort((a, b) => (a.apart ? 1 : 0) - (b.apart ? 1 : 0));
+  // Thera's group far on the LEFT, Turnur's far on the RIGHT
+  comps.forEach(c => {
+    c.apart = HUB_IDS.some(h => hubOut[h] && c.pos[String(h)]);
+    c.side = !c.apart ? 1 : (hubOut[HUB.thera.id] && c.pos[String(HUB.thera.id)] ? 0 : 2);
+  });
+  comps.sort((a, b) => a.side - b.side);
   let offset = 0; const all = {};
   comps.forEach((c, i) => {
     c.rad = Math.max(1, c.maxD) * VR;
-    if (i > 0) offset += comps[i - 1].rad + c.rad + VR * (c.apart && !comps[i - 1].apart ? 6 : 0.6);
+    if (i > 0) offset += comps[i - 1].rad + c.rad + VR * (c.side !== comps[i - 1].side ? 6 : 0.6);
     c.cx = offset;
     for (const id in c.pos){ const p = c.pos[id]; all[id] = { x:p.x + offset, y:p.y, z:p.z, d:p.d }; }
   });
