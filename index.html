@@ -1282,7 +1282,7 @@ function render(){
     const n = map.nodes[id]; if (!n) continue;
     const c = CLASS[n.cls] || CLASS['?'];
     const mine = mineAt(n.id), here = mine.length > 0;
-    const g = el('g', { class:'node' + (here ? ' here' : '') + (sel && sel.kind === 'node' && sel.id == n.id ? ' sel' : ''), transform:`translate(${n.x} ${n.y})`, tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, gn);
+    const g = el('g', { class:'node' + (here ? ' here' : '') + (isSelNode(n.id) ? ' sel' : ''), transform:`translate(${n.x} ${n.y})`, tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, gn);
     if (here) el('rect', { x:-4, y:-4, width:NW + 8, height:NH + 8, rx:7, class:'halo' }, g);
     el('rect', { width:NW, height:NH, rx:4, class:'box' }, g);
     el('rect', { width:5, height:NH, rx:2, fill:c.color }, g);
@@ -1443,7 +1443,7 @@ function renderVolume(){
     const mineV = mineAt(it.id);
     if (mineV.length) el('circle', { cx:p.x, cy:p.y, r:rad + 5, class:'halo' }, g);
     el('circle', { cx:p.x, cy:p.y, r:rad, fill:`url(#vg-${(n.cls in CLASS ? n.cls : '?').replace('?', 'U')})` }, g);
-    if (sel && sel.kind === 'node' && String(sel.id) === String(it.id)) el('circle', { cx:p.x, cy:p.y, r:rad + 3, class:'vsel' }, g);
+    if (isSelNode(it.id)) el('circle', { cx:p.x, cy:p.y, r:rad + 3, class:'vsel' }, g);
     const fs = Math.max(10, Math.min(20, 14 * p.s));
     const t = el('text', { x:p.x, y:p.y + rad + fs + 2, 'text-anchor':'middle', class:'vname', 'font-size':fs }, g); t.textContent = n.name;
     const ws = whData.systems[n.id];
@@ -1459,10 +1459,11 @@ function renderVolume(){
 (() => {
   const vs = $('#vol'); let vd = null;
   vs.addEventListener('pointerdown', ev => {
-    const linkId = ev.target.dataset && ev.target.dataset.link;
+    let g = ev.target.closest && ev.target.closest('.vnode');
+    if (!g && document.elementsFromPoint) g = document.elementsFromPoint(ev.clientX, ev.clientY).map(x => x.closest && x.closest('.vnode')).find(Boolean) || null;
+    const linkId = !g && ev.target.dataset && ev.target.dataset.link;
     if (linkId){ select('link', linkId); return; }
-    const g = ev.target.closest && ev.target.closest('.vnode');
-    vd = { sx:ev.clientX, sy:ev.clientY, yaw:vcam.yaw, pitch:vcam.pitch, px:vcam.px, py:vcam.py, pan:ev.shiftKey, node:g ? g.dataset.node : null, moved:false };
+    vd = { sx:ev.clientX, sy:ev.clientY, yaw:vcam.yaw, pitch:vcam.pitch, px:vcam.px, py:vcam.py, pan:ev.shiftKey, multi:ev.ctrlKey || ev.shiftKey || ev.metaKey, node:g ? g.dataset.node : null, moved:false };
     vs.classList.add('panning'); try{ vs.setPointerCapture(ev.pointerId); }catch(e){}
   });
   vs.addEventListener('pointermove', ev => {
@@ -1476,7 +1477,7 @@ function renderVolume(){
   });
   vs.addEventListener('pointerup', () => {
     if (!vd) return;
-    if (!vd.moved){ if (vd.node) select('node', vd.node); else { sel = null; render(); } }
+    if (!vd.moved){ if (vd.node) clickSystem(vd.node, vd.multi); else { sel = null; linkPick = false; render(); } }
     vd = null; vs.classList.remove('panning');
   });
   vs.addEventListener('wheel', ev => { ev.preventDefault(); vcam.k = Math.min(3, Math.max(0.3, vcam.k * (ev.deltaY < 0 ? 1.12 : 1 / 1.12))); renderVolume(); }, { passive:false });
@@ -1489,7 +1490,7 @@ let drag = null;
 const svg = $('#map');
 function startDrag(ev, n){
   ev.stopPropagation();
-  drag = { n, sx:ev.clientX, sy:ev.clientY, ox:n.x, oy:n.y, moved:false };
+  drag = { n, sx:ev.clientX, sy:ev.clientY, ox:n.x, oy:n.y, moved:false, multi:ev.ctrlKey || ev.shiftKey || ev.metaKey };
   try{ svg.setPointerCapture(ev.pointerId); }catch(e){}
 }
 svg.addEventListener('pointerdown', ev => {
@@ -1509,7 +1510,7 @@ svg.addEventListener('pointerup', () => {
   if (!drag) return;
   if (drag.pan){ if (!drag.moved){ sel = null; render(); } }
   else if (drag.moved) patch(`nodes/${drag.n.id}`, { x:drag.n.x, y:drag.n.y });
-  else select('node', drag.n.id);
+  else clickSystem(drag.n.id, drag.multi);
   drag = null; svg.classList.remove('panning');
 });
 svg.addEventListener('wheel', ev => { ev.preventDefault(); zoomAt(ev.deltaY < 0 ? 1.12 : 1 / 1.12, ev.offsetX, ev.offsetY); }, { passive:false });
@@ -1527,17 +1528,26 @@ function center(){
 /* =========================================================
    Panneau de sélection
    ========================================================= */
-function select(kind, id){ sel = { kind, id }; if (kind === 'node') loadZkill(id); render(); }
+let linkPick = false;   // en attente du clic sur le 2e système
+function select(kind, id){ sel = { kind, id }; linkPick = false; if (kind === 'node') loadZkill(id); render(); }
+/* Clic sur un système : Ctrl/Maj + clic (ou le bouton « Sélectionner un 2e système ») ajoute un 2e système à la sélection */
+function clickSystem(id, multi){
+  if ((multi || linkPick) && sel && sel.kind === 'node' && String(sel.id) !== String(id) && map.nodes[sel.id]){
+    sel = { kind:'node', id:sel.id, second:id }; linkPick = false; lastSelKey = ''; render(); return;
+  }
+  select('node', id);
+}
+const isSelNode = id => sel && sel.kind === 'node' && (String(sel.id) === String(id) || (sel.second != null && String(sel.second) === String(id)));
 let lastSelKey = '';
 function renderSel(){
   const box = $('#selBody');
   if (!sel){ lastSelKey = ''; box.className = 'empty'; box.innerHTML = 'Cliquez sur un système ou une connexion de la carte.'; return; }
   // Ne pas reconstruire le panneau si l'utilisateur est en train d'écrire dedans
-  const key = sel.kind + ':' + sel.id;
+  const key = sel.kind + ':' + sel.id + ':' + (sel.second ?? '') + ':' + linkPick;
   if (key === lastSelKey && box.contains(document.activeElement) && /TEXTAREA|INPUT|SELECT/.test(document.activeElement.tagName)) return;
   lastSelKey = key;
   box.className = '';
-  if (sel.kind === 'node') renderNodePanel(box); else renderLinkPanel(box);
+  if (sel.kind === 'node' && sel.second != null) renderPairPanel(box); else if (sel.kind === 'node') renderNodePanel(box); else renderLinkPanel(box);
 }
 function renderNodePanel(box){
   const n = map.nodes[sel.id]; if (!n){ sel = null; renderSel(); return; }
@@ -1571,7 +1581,11 @@ function renderNodePanel(box){
       <button type="button" class="small" id="nSigClear">Tout effacer</button>
     </div>
     ${sigRows ? `<table><thead><tr><th>ID</th><th>Groupe</th><th>Type</th><th class="r">%</th></tr></thead><tbody>${sigRows}</tbody></table>` : '<span class="empty">Aucune signature enregistrée.</span>'}
+    <h3>Relier à un autre système</h3>
+    ${linkPick ? `<div class="box res"><b>Cliquez maintenant sur le 2e système</b> de la carte.<br><span class="dim">Échap pour annuler.</span></div>` : ''}
+    <div class="row"><button type="button" id="nPick"${linkPick ? ' disabled' : ''}>Sélectionner un 2e système</button><span class="note">ou Ctrl + clic sur l'autre système</span></div>
     <div class="row"><button type="button" class="danger" id="nDel">Retirer ce système</button></div>`;
+  $('#nPick').addEventListener('click', () => { linkPick = true; lastSelKey = ''; renderSel(); toast('Cliquez sur le 2e système de la carte.'); });
   let nt = null;
   $('#nNotes').addEventListener('input', e => { const v = e.target.value; clearTimeout(nt); nt = setTimeout(() => put(`nodes/${n.id}/notes`, v), 500); });
   $('#nSigAdd').addEventListener('click', () => {
@@ -1586,6 +1600,35 @@ function renderNodePanel(box){
     put(`nodes/${n.id}`, null);
     if (me.current == n.id){ me.current = null; saveMe(); }
     sel = null; lastSelKey = '';
+  });
+}
+function renderPairPanel(box){
+  const a = map.nodes[sel.id], b = map.nodes[sel.second];
+  if (!a || !b){ sel = a ? { kind:'node', id:a.id } : null; renderSel(); return; }
+  const ex = linkBetween(a.id, b.id);
+  const ca = CLASS[a.cls] || CLASS['?'], cb = CLASS[b.cls] || CLASS['?'];
+  const bothK = !isJ(a.cls) && !isJ(b.cls);
+  box.innerHTML = `
+    <div class="note">2 systèmes sélectionnés</div>
+    <div class="row" style="gap:6px"><span class="big" style="font-size:1.5rem">${esc(a.name)}</span><span class="badge" style="background:${ca.color}">${esc(ca.label)}</span>
+      <span class="dim">↔</span><span class="big" style="font-size:1.5rem">${esc(b.name)}</span><span class="badge" style="background:${cb.color}">${esc(cb.label)}</span></div>
+    ${ex ? `<div class="box res">Ces deux systèmes sont déjà reliés (${ex.type === 'gate' ? 'porte stellaire' : 'trou de ver'}).</div>
+      <div class="row"><button type="button" class="primary" id="pView">Voir la connexion</button><button type="button" id="pCancel">Annuler la sélection</button></div>`
+    : `<label class="f">Type de connexion<select id="pType">
+        <option value="auto">${bothK ? 'Détecter automatiquement' : 'Trou de ver'}</option>
+        <option value="wh">Trou de ver</option><option value="gate">Porte stellaire</option></select></label>
+      <div class="row"><button type="button" class="primary" id="pLink">Relier ces deux systèmes</button><button type="button" id="pCancel">Annuler la sélection</button></div>
+      <p class="note">Astuce : Ctrl + clic sur un système pour l'ajouter à la sélection.</p>`}`;
+  $('#pCancel').addEventListener('click', () => select('node', a.id));
+  if (ex){ $('#pView').addEventListener('click', () => select('link', ex.id)); return; }
+  $('#pLink').addEventListener('click', async () => {
+    if (!canEdit()){ readOnlyToast(); return; }
+    const btn = $('#pLink'); btn.disabled = true; btn.textContent = 'Connexion…';
+    const t = $('#pType').value;
+    const gate = t === 'gate' ? true : t === 'wh' ? false : (bothK ? await gateConnected(a.id, b.id) : false);
+    const id = addLink(a.id, b.id, gate);
+    toast(`${a.name} et ${b.name} sont reliés${gate ? ' (porte stellaire)' : ''}.`);
+    select('link', id);
   });
 }
 function importSigs(existing, text, replace){
@@ -2035,7 +2078,7 @@ document.querySelectorAll('#help [role=tab]').forEach(b => b.addEventListener('c
   document.querySelectorAll('#help [role=tab]').forEach(x => x.setAttribute('aria-selected', String(x === b)));
   document.querySelectorAll('#help .tabpane').forEach(p => p.hidden = p.id !== b.dataset.tab);
 }));
-document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeSetup(); $('#help').classList.remove('open'); $('#access').classList.remove('open'); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeSetup(); $('#help').classList.remove('open'); $('#access').classList.remove('open'); if (linkPick){ linkPick = false; lastSelKey = ''; renderSel(); } } });
 
 /* =========================================================
    Démarrage
