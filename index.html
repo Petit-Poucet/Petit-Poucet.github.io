@@ -36,6 +36,7 @@ a{color:var(--accent)}
 header{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
 header h1{font-family:var(--display);font-size:1.5rem;margin:0 8px 0 0;letter-spacing:.05em;text-transform:uppercase}
 header h1 b{color:var(--accent)}
+.ver{font-family:var(--mono);font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:3px;padding:2px 6px;margin-left:-4px;white-space:nowrap}
 header .grow{flex:1}
 header form{display:flex;gap:6px}
 header form input{width:150px}
@@ -156,6 +157,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
+  <span class="ver" id="appVersion" title="Version de la carte">v1.7</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Ajouter un système…" aria-label="Nom du système à ajouter">
     <button type="submit">Ajouter</button>
@@ -541,6 +543,8 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
+const APP_VERSION = '1.7';            // à augmenter à chaque mise à jour du fichier
+const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
 const SSO = 'https://login.eveonline.com/v2/oauth';
@@ -2113,6 +2117,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeSetup(
    Démarrage
    ========================================================= */
 (async () => {
+  $('#appVersion').textContent = 'v' + APP_VERSION; $('#appVersion').title = `Version ${APP_VERSION} du ${APP_DATE}`;
   handleConfigLink();
   await handleCallback();
   if (tok && cloudReady() && (!fb || fb.uid !== 'eve-' + tok.charId)){
