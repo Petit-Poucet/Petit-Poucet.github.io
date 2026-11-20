@@ -253,7 +253,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v5.2</span>
+  <span class="ver" id="appVersion" title="Map version">v5.3</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -426,10 +426,22 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
       </form>
       <div id="aclList"><span class="empty">Loading…</span></div>
       <p class="note">Only these characters can open your map, after logging in with their EVE account. Removing a player cuts their access immediately. "Multi-char" lets the player track their other characters at the same time (you, the owner, always can).</p>
+      <div id="cfgLinkBox">
       <h3>Setup link for your players</h3>
       <p class="note">Send it once to each allowed player: it configures the map on their side. This link grants no access by itself.</p>
       <input id="cfgLink" class="mono" readonly aria-label="Setup link">
       <div class="row"><button type="button" class="small" id="btnCopyCfg">Copy link</button></div>
+      </div>
+    </div>
+    <div id="ownersBox" hidden>
+      <h3>Other corporations (their own map)</h3>
+      <p class="note">Each map owner gets their own separate map and manages its access. They never see your map, and you never see theirs, unless one invites the other.</p>
+      <form id="ownForm" class="row" autocomplete="off">
+        <input id="ownName" placeholder="Map owner's in-game name" aria-label="Map owner's name" style="flex:1;min-width:180px">
+        <label class="row" style="gap:4px;font-size:12px">Max <input type="number" id="ownMax" value="3" min="1" max="50" style="width:56px"> chars</label>
+        <button type="submit" class="primary">Allow</button>
+      </form>
+      <div id="ownList"></div>
     </div>
     <div class="row"><button type="button" id="closeAccess">Close</button></div>
   </div>
@@ -470,7 +482,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '5.2';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '5.3';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -628,8 +640,7 @@ async function cloudLogin(){
   if (!s2.ok) throw new Error('Firebase refused the connection: check the Web API key and that Authentication is enabled (' + ((sj.error && sj.error.message) || s2.status) + ').');
   fb = { idToken:sj.idToken, refresh:sj.refreshToken, exp:Date.now() + Number(sj.expiresIn || 3600) * 1000, uid:j.uid, name:j.name };
   store.set(CK.fb + tok.charId, fb);
-  if (SITE_LOCK) slot.mapOwner = SITE_LOCK.owner;
-  if (!slot.mapOwner) slot.mapOwner = fb.uid;
+  if (!slot.mapOwner && !SITE_LOCK) slot.mapOwner = fb.uid;
   saveCfg();
   fbReq('PUT', `maps/${fb.uid}/ownerName`, fb.name).catch(() => {});
   $('#btnAccess').hidden = false;
@@ -682,15 +693,20 @@ let mapOwnerName = '';
 
 async function connectShared(){
   streams.forEach(e => e.close()); streams = []; clearTimeout(reconnectT);
-  if (SITE_LOCK && fb) slot.mapOwner = SITE_LOCK.owner;
-  $('#btnAccess').hidden = !(cloudReady() && fb) || (!!SITE_LOCK && fb && fb.uid !== SITE_LOCK.owner);
+  if (locked() && fb && tok){
+    try{ await ensureFb(); }catch(e){ toast(e.message, true); setSync('err', 'Sharing: log in again'); lockState = 'out'; renderLock(); return; }
+    const mo = await lockResolve();
+    if (!mo){ lockState = 'noaccess'; map = emptyMap(); $('#btnAccess').hidden = true; setSync('err', 'No access'); renderLock(); renderAll(); return; }
+    slot.mapOwner = mo;
+  }
+  $('#btnAccess').hidden = !(cloudReady() && fb);
   if (!shared()){ lockState = tok ? 'pending' : 'out'; renderLock(); if (locked()){ map = emptyMap(); setSync('', tok ? 'Private map · connecting' : 'Private map · log in'); return; } myRole = 'owner'; setSync('', demoMode ? 'Demo' : (cloudReady() && !tok ? 'Local map · log in' : 'Local map')); return; }
   try{ await ensureFb(); }catch(e){ toast(e.message, true); setSync('err', 'Sharing: log in again'); return; }
   map = normalize(store.get(cacheKey(), null));
   setSync('', 'Connecting to sharing…');
   // Rôle sur la carte affichée
   myMulti = false;
-  if (slot.mapOwner === fb.uid){ myRole = 'owner'; mapOwnerName = fb.name; lockState = 'ok'; }
+  if (slot.mapOwner === fb.uid){ myRole = 'owner'; mapOwnerName = fb.name; lockState = 'ok'; connectShared.retry = 0; if (locked() && fb.uid !== SITE_LOCK.owner) remote('PUT', 'ownerName', fb.name); }
   else {
     try{
       const acl = await fbReq('GET', `maps/${slot.mapOwner}/acl/${fb.uid}`);
@@ -698,9 +714,9 @@ async function connectShared(){
       myRole = acl.role === 'edit' ? 'edit' : 'view';
       myMulti = acl.multi === true;
       mapOwnerName = await fbReq('GET', `maps/${slot.mapOwner}/ownerName`).catch(() => '') || '';
-      lockState = 'ok';
+      lockState = 'ok'; connectShared.retry = 0;
     }catch(e){
-      if (SITE_LOCK){ lockState = 'noaccess'; map = emptyMap(); setSync('err', 'No access'); renderLock(); renderAll(); return; }
+      if (SITE_LOCK){ delete myAccess[slot.mapOwner]; slot.mapOwner = ''; saveCfg(); if ((connectShared.retry = (connectShared.retry || 0) + 1) < 3) return connectShared(); lockState = 'noaccess'; map = emptyMap(); setSync('err', 'No access'); renderLock(); renderAll(); return; }
       toast('You no longer have access to this map. Back to your own map.', true);
       slot.mapOwner = fb.uid; saveCfg(); return connectShared();
     }
@@ -1478,7 +1494,7 @@ function renderLock(){
   box.hidden = !show; if (!show) return;
   const owner = SITE_LOCK.ownerName || 'the owner';
   $('#lockText').innerHTML = lockState === 'noaccess'
-    ? `<b>${esc(tok ? tok.charName : '')}</b> has no access to this map.<br>Ask <b>${esc(owner)}</b> to add this character in <i>Access</i>, then reload the page.`
+    ? `<b>${esc(tok ? tok.charName : '')}</b> has no access to any map on this site.<br>Ask the owner of the map you want to join (your corporation's map owner, or <b>${esc(owner)}</b>) to add this character in <i>Access</i>, then reload the page.`
     : lockState === 'pending' ? 'Checking your access…'
     : `This map belongs to <b>${esc(owner)}</b>'s group.<br>Log in with EVE if you have been given access.`;
   $('#lockLogin').hidden = lockState === 'pending';
@@ -1491,22 +1507,39 @@ async function loadSiteLock(){
   const changed = JSON.stringify(nc) !== JSON.stringify(cfg.cloud) || cfg.clientId !== SITE_LOCK.clientId;
   cfg.clientId = SITE_LOCK.clientId; cfg.cloud = nc;
   if (changed){ fb = null; vaultChars().forEach(c => { store.del(CK.fb + c.charId); store.del(CK.slot + c.charId); }); }
-  slot.mapOwner = SITE_LOCK.owner; saveCfg();
+  saveCfg();
   if (!tok) map = emptyMap();
   $('#setupTech').hidden = true; $('#setupTech2').hidden = true; $('#lockNote').hidden = false;
-  const ms = $('#mapSel'); if (ms) ms.closest('label').hidden = true;
 }
 function lockedRules(owner){
-  const O = `auth.uid === '${owner}'`, A = (sub) => `root.child('maps').child($owner).child('acl').child(auth.uid)${sub}`;
+  const S = `'${owner}'`, isMO = u => `(${u} === ${S} || root.child('owners').child(${u}).exists())`;
+  const A = sub => `root.child('maps').child($owner).child('acl').child(auth.uid)${sub}`;
+  const MEMBER = `auth != null && ($owner === auth.uid || ${A('.exists()')})`;
+  const MAX = `root.child('owners').child($owner).child('max').val()`;
   return JSON.stringify({ rules:{ '.read':false, '.write':false,
+    owners:{ '.read':`auth != null && auth.uid === ${S}`,
+      $uid:{ '.read':`auth != null && ($uid === auth.uid || auth.uid === ${S})`, '.write':`auth != null && auth.uid === ${S}` } },
     maps:{ $owner:{
-      ownerName:{ '.read':`auth != null && ($owner === auth.uid || ${A('.exists()')})`, '.write':`auth != null && $owner === auth.uid && ${O}` },
-      acl:{ '.read':`auth != null && ($owner === auth.uid || data.child(auth.uid).exists())`, '.write':`auth != null && $owner === auth.uid && ${O}` },
-      data:{ '.read':`auth != null && ($owner === auth.uid || ${A('.exists()')})`, '.write':`auth != null && $owner === '${owner}' && ($owner === auth.uid || ${A(".child('role').val() === 'edit'")})` },
-      pilots:{ '.read':`auth != null && ($owner === auth.uid || ${A('.exists()')})`,
-        $uid:{ '.write':`auth != null && $owner === '${owner}' && ($owner === auth.uid || ($uid === auth.uid && ${A('.exists()')}))`,
+      ownerName:{ '.read':MEMBER, '.write':`auth != null && $owner === auth.uid && ${isMO('auth.uid')}` },
+      acl:{ '.read':`auth != null && ($owner === auth.uid || data.child(auth.uid).exists())`, '.write':`auth != null && $owner === auth.uid && ${isMO('auth.uid')}`,
+        $uid:{ '.validate':`$owner === ${S} || (newData.child('slot').isNumber() && newData.child('slot').val() >= 1 && newData.child('slot').val() <= ${MAX} - 1 && newData.parent().parent().child('slots').child(newData.child('slot').val() + '').val() === $uid)` } },
+      slots:{ '.read':`auth != null && $owner === auth.uid`, '.write':`auth != null && $owner === auth.uid && ${isMO('auth.uid')}`, $n:{ '.validate':'newData.isString()' } },
+      data:{ '.read':MEMBER, '.write':`auth != null && ${isMO('$owner')} && ($owner === auth.uid || ${A(".child('role').val() === 'edit'")})` },
+      pilots:{ '.read':MEMBER,
+        $uid:{ '.write':`auth != null && ${isMO('$owner')} && ($owner === auth.uid || ($uid === auth.uid && ${A('.exists()')}))`,
           alts:{ '.validate':`$owner === auth.uid || ${A(".child('multi').val() === true")}` } } } } },
-    access:{ $uid:{ '.read':'auth != null && $uid === auth.uid', $owner:{ '.write':`auth != null && $owner === auth.uid && ${O}` } } } } }, null, 2);
+    access:{ $uid:{ '.read':'auth != null && $uid === auth.uid', $owner:{ '.write':`auth != null && $owner === auth.uid && ${isMO('auth.uid')}` } } } } }, null, 2);
+}
+/* Which map a player opens on a locked site: their own if they are a map owner, otherwise one they were given access to */
+let isMapOwner = false, myOwnerRec = null, myAccess = {};
+async function lockResolve(){
+  myOwnerRec = fb.uid === SITE_LOCK.owner ? { max:0 } : await fbReq('GET', `owners/${fb.uid}`).catch(() => null);
+  isMapOwner = !!myOwnerRec;
+  myAccess = await fbReq('GET', `access/${fb.uid}`).catch(() => ({})) || {};
+  if (slot.mapOwner && (slot.mapOwner === fb.uid ? isMapOwner : myAccess[slot.mapOwner])) return slot.mapOwner;
+  if (isMapOwner) return fb.uid;
+  if (myAccess[SITE_LOCK.owner]) return SITE_LOCK.owner;
+  return Object.keys(myAccess)[0] || null;
 }
 function wpHelp(){
   toast('"Set destination" is not allowed by your EVE app yet. On developers.eveonline.com, open your app, tick esi-ui.write_waypoint.v1, save, then log out and log in again with EVE.', true);
@@ -2928,11 +2961,41 @@ function handleConfigLink(){
 }
 
 /* ---------- Panneau Accès ---------- */
+const aclLimit = () => SITE_LOCK && fb && fb.uid !== SITE_LOCK.owner && myOwnerRec ? Math.max(0, Number(myOwnerRec.max || 3) - 1) : 0;
+async function loadOwners(){
+  const box = $('#ownList');
+  try{
+    const o = await fbReq('GET', 'owners') || {};
+    const ids = Object.keys(o).sort((a, b) => String(o[a].name).localeCompare(String(o[b].name)));
+    if (!ids.length){ box.innerHTML = '<span class="empty">No other corporation has its own map yet.</span>'; return; }
+    box.innerHTML = `<table><thead><tr><th>Map owner</th><th>Corporation</th><th class="r">Max chars</th><th></th></tr></thead><tbody>${ids.map(u => `
+      <tr><td><b>${esc(o[u].name)}</b></td><td>${esc(o[u].corp || '–')}</td>
+      <td class="r"><input type="number" min="1" max="50" value="${Number(o[u].max || 3)}" data-omax="${esc(u)}" style="width:56px" aria-label="Max characters for ${esc(o[u].name)}"></td>
+      <td class="r"><button type="button" class="small danger" data-odel="${esc(u)}">Remove</button></td></tr>`).join('')}</tbody></table>`;
+    box.querySelectorAll('[data-omax]').forEach(x => x.addEventListener('change', async () => {
+      const v = Math.max(1, Math.min(50, Number(x.value) || 3));
+      try{ await fbReq('PUT', `owners/${x.dataset.omax}/max`, v); toast('Limit updated'); }catch(e){ toast('Change refused by the database: publish the locked rules first.', true); }
+    }));
+    box.querySelectorAll('[data-odel]').forEach(x => x.addEventListener('click', async () => {
+      try{ await fbReq('DELETE', `owners/${x.dataset.odel}`); toast('This player can no longer use their own map.'); loadOwners(); }catch(e){ toast('Removal refused by the database.', true); }
+    }));
+  }catch(e){ box.innerHTML = '<span class="badline">Cannot read the list: publish the locked rules in Firebase (Settings → 🔒).</span>'; }
+}
+async function addOwner(name, max){
+  const r = await fetch(ESI + '/universe/ids/', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify([name]) });
+  const j = r.ok ? await r.json() : {}, c = j.characters && j.characters[0];
+  if (!c){ toast(`Character "${name}" not found. Check the exact in-game spelling.`, true); return; }
+  if ('eve-' + c.id === fb.uid){ toast('You already own your map.', true); return; }
+  let corp = '';
+  try{ const ch = await esi(`/characters/${c.id}/`); corp = (await esi(`/corporations/${ch.corporation_id}/`)).name || ''; }catch(e){}
+  try{ await fbReq('PUT', `owners/eve-${c.id}`, { name:c.name, corp, max, t:Date.now() }); toast(`${c.name}${corp ? ' (' + corp + ')' : ''} can now create their own map.`); $('#ownName').value = ''; loadOwners(); }
+  catch(e){ toast('Refused by the database: publish the locked rules first (Settings → 🔒).', true); }
+}
 async function openAccess(){
   if (!fb){ toast('Log in with EVE first.', true); return; }
   $('#access').classList.add('open');
   const sel = $('#mapSel');
-  sel.innerHTML = `<option value="${esc(fb.uid)}">My map (${esc(fb.name)})</option>`;
+  sel.innerHTML = !SITE_LOCK || isMapOwner ? `<option value="${esc(fb.uid)}">My map (${esc(fb.name)})</option>` : '';
   try{
     const acc = await fbReq('GET', `access/${fb.uid}`) || {};
     for (const owner in acc) sel.insertAdjacentHTML('beforeend', `<option value="${esc(owner)}">${esc(acc[owner] && acc[owner].name || owner)}'s map</option>`);
@@ -2940,8 +3003,11 @@ async function openAccess(){
   sel.value = slot.mapOwner || fb.uid;
   const mine = sel.value === fb.uid;
   $('#aclBox').hidden = !mine;
-  $('#mapRoleNote').textContent = mine ? 'You own this map.' : (myRole === 'edit' ? 'You can edit this map.' : 'You have read-only access to this map.');
-  if (mine){ $('#cfgLink').value = cfgLink(); loadAcl(); }
+  const lim = aclLimit();
+  $('#mapRoleNote').textContent = mine ? 'You own this map.' + (lim ? ` Up to ${lim + 1} characters: you + ${lim} invited.` : '') : (myRole === 'edit' ? 'You can edit this map.' : 'You have read-only access to this map.');
+  $('#ownersBox').hidden = !(SITE_LOCK && fb.uid === SITE_LOCK.owner && mine);
+  $('#cfgLinkBox').hidden = !!SITE_LOCK;
+  if (mine){ $('#cfgLink').value = cfgLink(); loadAcl(); if (!$('#ownersBox').hidden) loadOwners(); }
 }
 async function loadAcl(){
   const box = $('#aclList');
@@ -2963,12 +3029,13 @@ async function loadAcl(){
     }));
     box.querySelectorAll('[data-del]').forEach(x => x.addEventListener('click', async () => {
       const u = x.dataset.del;
-      try{ await fbReq('DELETE', `maps/${fb.uid}/acl/${u}`); await fbReq('DELETE', `access/${u}/${fb.uid}`); await fbReq('DELETE', `maps/${fb.uid}/pilots/${u}`).catch(() => {}); toast('Access removed'); loadAcl(); }
+      try{ const cur = await fbReq('GET', `maps/${fb.uid}/acl/${u}`).catch(() => null); await fbReq('DELETE', `maps/${fb.uid}/acl/${u}`); if (cur && cur.slot) await fbReq('DELETE', `maps/${fb.uid}/slots/${cur.slot}`).catch(() => {}); await fbReq('DELETE', `access/${u}/${fb.uid}`); await fbReq('DELETE', `maps/${fb.uid}/pilots/${u}`).catch(() => {}); toast('Access removed'); loadAcl(); }
       catch(e){ toast('Removal refused by the database.', true); }
     }));
   }catch(e){ box.innerHTML = '<span class="badline">Cannot read the list: check the Firebase rules (Help).</span>'; }
 }
 $('#btnAccess').addEventListener('click', openAccess);
+$('#ownForm').addEventListener('submit', ev => { ev.preventDefault(); const n = $('#ownName').value.trim(); if (n) addOwner(n, Math.max(1, Math.min(50, Number($('#ownMax').value) || 3))); });
 $('#closeAccess').addEventListener('click', () => $('#access').classList.remove('open'));
 $('#btnCopyCfg').addEventListener('click', () => copyText($('#cfgLink').value, 'Link copied'));
 $('#mapSel').addEventListener('change', async e => {
@@ -2985,7 +3052,20 @@ $('#aclForm').addEventListener('submit', async ev => {
     if (!c){ toast(`Character "${name}" not found. Check the exact in-game spelling.`, true); return; }
     const uid = 'eve-' + c.id;
     if (uid === fb.uid){ toast('That is your own character: you already have access.', true); return; }
-    await fbReq('PUT', `maps/${fb.uid}/acl/${uid}`, { name:c.name, role:$('#aclRole').value, t:Date.now() });
+    const rec = { name:c.name, role:$('#aclRole').value, t:Date.now() };
+    const lim = aclLimit();
+    if (lim){
+      // limited map (other corps): each invited character takes one of the numbered places, checked by the database
+      const cur = await fbReq('GET', `maps/${fb.uid}/acl/${uid}`).catch(() => null);
+      if (cur && cur.slot){ rec.slot = cur.slot; }
+      else {
+        const slots = await fbReq('GET', `maps/${fb.uid}/slots`).catch(() => null) || {};
+        let n = 0; for (let k = 1; k <= lim; k++) if (!slots[k]){ n = k; break; }
+        if (!n){ toast(`Your map is limited to ${lim + 1} characters (you + ${lim}). Remove someone first.`, true); return; }
+        rec.slot = n;
+      }
+      await fbReq('PATCH', `maps/${fb.uid}`, { [`acl/${uid}`]:rec, [`slots/${rec.slot}`]:uid });
+    } else await fbReq('PUT', `maps/${fb.uid}/acl/${uid}`, rec);
     await fbReq('PUT', `access/${uid}/${fb.uid}`, { name:fb.name, t:Date.now() });
     $('#aclName').value = ''; toast(`${c.name} now has access to your map.`); loadAcl();
   }catch(e){ toast('Add refused: ' + (e.status ? 'check the Firebase rules.' : e.message), true); }
