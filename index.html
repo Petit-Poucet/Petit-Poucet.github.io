@@ -249,7 +249,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v4.1</span>
+  <span class="ver" id="appVersion" title="Map version">v4.8</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -357,10 +357,6 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
       <p class="note">Connections published by EVE-Scout (Signal Cartel), refreshed every 5 minutes.</p>
     </section>
 
-    <section class="card">
-      <h2>Exits to k-space</h2>
-      <div id="exitsBody" class="empty">No k-space system on the map.</div>
-    </section>
 
     <section class="card">
       <h2>Jump log</h2>
@@ -435,7 +431,6 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
         <li>In the in-game scanner, press Ctrl+A then Ctrl+C, and paste into the system's <b>Signatures</b> box.</li>
         <li>Click a <b>connection</b> to set the hole type (e.g. H296), mass, end of life, and use the mass calculator.</li>
         <li>Log each pass ("Add a pass") to track remaining mass, shared with the whole corp.</li>
-        <li><b>Exits to k-space</b>: counts jumps to Jita, Amarr, Dodixie, Rens, Hek and your home.</li>
         <li>Drag systems with the mouse, use the wheel to zoom, drag the background to pan.</li>
       </ol>
     </div>
@@ -664,7 +659,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '4.1';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '4.8';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -1025,26 +1020,32 @@ async function gateConnected(a, b){
 }
 const gateStore = store.get('whmap.gates', {});   // les routes par portes ne changent pas : cache permanent
 let gateSaveT = null;
-async function routeJumps(origin, dest){
+let routeFails = 0;
+async function routeJumps(origin, dest, pref){
   if (String(origin) === String(dest)) return 0;
-  const key = origin + '>' + dest;
+  const safe = pref === 'safe';
+  const key = (safe ? 's:' : '') + origin + '>' + dest;
   if (key in gateStore) return gateStore[key];
   if (routeCache.has(key)) return routeCache.get(key);
   let ids = null;
+  for (let attempt = 0; attempt < 3 && !ids; attempt++){
+  if (attempt) await new Promise(res => setTimeout(res, 800 * attempt));   // CCP may refuse bursts of requests: wait and retry
   try{
-    const r = await fetch(`${ESI_ROOT}/route/${origin}/${dest}`, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Compatibility-Date':'2025-09-30' }, body:JSON.stringify({ preference:'Shorter' }) });
+    const r = await fetch(`${ESI_ROOT}/route/${origin}/${dest}`, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Compatibility-Date':'2025-09-30' }, body:JSON.stringify({ preference:safe ? 'Safer' : 'Shorter' }) });
     if (r.ok){ const j = await r.json(); ids = Array.isArray(j) ? j : (j.route || j.systems || null); }
   }catch(e){}
   if (!ids){
-    try{ const r = await fetch(`${ESI}/route/${origin}/${dest}/?flag=shortest`); if (r.ok) ids = await r.json(); }catch(e){}
+    try{ const r = await fetch(`${ESI}/route/${origin}/${dest}/?flag=${safe ? 'secure' : 'shortest'}`); if (r.ok) ids = await r.json(); }catch(e){}
+  }
   }
   const n = Array.isArray(ids) ? Math.max(0, ids.length - 1) : null;
+  if (n == null){ routeFails++; return null; }   // a failure is never remembered: next calculation asks again
   routeCache.set(key, n);
-  if (n != null){ gateStore[key] = n; gateStore[dest + '>' + origin] = n; clearTimeout(gateSaveT); gateSaveT = setTimeout(() => store.set('whmap.gates', gateStore), 1000); }
+  if (n != null){ gateStore[key] = n; gateStore[(safe ? 's:' : '') + dest + '>' + origin] = n; clearTimeout(gateSaveT); gateSaveT = setTimeout(() => store.set('whmap.gates', gateStore), 1000); }
   return n;
 }
 /* Lance des calculs en parallèle (6 à la fois) pour ne pas saturer ESI */
-async function pool(tasks, n = 6){
+async function pool(tasks, n = 3){
   const out = new Array(tasks.length); let i = 0;
   await Promise.all(Array.from({ length:Math.min(n, tasks.length) }, async () => { while (i < tasks.length){ const k = i++; out[k] = await tasks[k](); } }));
   return out;
@@ -1276,46 +1277,64 @@ async function gotoHub(key){
 
 /* ---------- Calcul des chemins : carte + portes + trous de ver ---------- */
 // Points de départ en k-space : votre système s'il est en k-space, sinon les systèmes k-space de la carte que vous pouvez rejoindre
-function routeOrigins(){
+function routeOrigins(avoid){
   if (me.current == null || !map.nodes[me.current]) return [];
   const cur = map.nodes[me.current];
   if (isK(cur.cls) && isRealId(cur.id)) return [{ sys:cur.id, hops:0, path:[String(cur.id)] }];
   const out = [];
   for (const id in map.nodes){
     const n = map.nodes[id]; if (!n || !isK(n.cls) || !isRealId(id)) continue;
-    const p = findPath(me.current, id); if (p && !p.none) out.push({ sys:Number(id), hops:p.ids.length - 1, path:p.ids });
+    if (avoid && avoid.has(String(id))) continue;
+    const p = findPath(me.current, id, avoid); if (p && !p.none) out.push({ sys:Number(id), hops:p.ids.length - 1, path:p.ids });
   }
   return out.sort((a, b) => a.hops - b.hops).slice(0, 5);
 }
 const nm = id => (map.nodes[id] && map.nodes[id].name) || (HUBS.find(h => h.id == id) || {}).name || (cfg.home && cfg.home.id == id ? cfg.home.name : '') || (hubData.conns.find(c => c.sys == id) || {}).name || (Object.values(HUB).find(h => h.id == id) || {}).name || String(id);
 const mapLeg = o => o.hops ? `Map: ${o.path.map(nm).join(' → ')} (${o.hops} jump${o.hops > 1 ? 's' : ''})` : null;
 // Meilleur moyen d'atteindre un système k-space depuis votre position (carte, puis portes)
-async function reachK(target){
+async function reachK(target, avoid, pref){
   let best = null;
-  const origins = routeOrigins();
-  const res = await pool(origins.map(o => async () => ({ o, g:await routeJumps(o.sys, target) })));
-  for (const { o, g } of res) if (g != null && (!best || o.hops + g < best.cost)) best = { cost:o.hops + g, legs:[mapLeg(o), g ? `Gates: ${nm(o.sys)} → ${nm(target)} (${g} jump${g > 1 ? 's' : ''})` : null].filter(Boolean) };
+  const origins = routeOrigins(avoid);
+  const res = await pool(origins.map(o => async () => ({ o, g:await routeJumps(o.sys, target, pref) })));
+  for (const { o, g } of res) if (g != null && (!best || o.hops + g < best.cost)) best = { cost:o.hops + g, legs:[mapLeg(o), g ? `${pref === 'safe' ? 'Safest gates' : 'Gates'}: ${nm(o.sys)} → ${nm(target)} (${g} jump${g > 1 ? 's' : ''})` : null].filter(Boolean) };
   return best;
 }
 // Meilleur moyen d'entrer dans un hub (Thera ou Turnur)
-async function reachHub(hubId){
+async function reachHub(hubId, pref){
   let best = null;
   const cand = c => { if (c && (!best || c.cost < best.cost)) best = c; };
   if (map.nodes[hubId] && me.current != null){ const p = findPath(me.current, hubId); if (p && !p.none) cand({ cost:p.ids.length - 1, legs:[`Map: ${p.ids.map(nm).join(' → ')} (${p.ids.length - 1} jump${p.ids.length > 2 ? 's' : ''})`] }); }
-  if (hubId === HUB.turnur.id){ const r = await reachK(hubId); if (r) cand(r); }
+  if (hubId === HUB.turnur.id){ const r = await reachK(hubId, null, pref); if (r) cand(r); }
   const exits = hubConns(hubId).filter(c => isKcls(c.cls));
-  const rs = await pool(exits.map(c => async () => ({ c, r:await reachK(c.sys) })));
+  const rs = await pool(exits.map(c => async () => ({ c, r:await reachK(c.sys, null, pref) })));
   for (const { c, r } of rs) if (r) cand({ cost:r.cost + 1, legs:[...r.legs, `Wormhole: ${c.name} → ${nm(hubId)} (sig ${c.inSig || '?'}, max ${c.size})`] });
   return best;
 }
 // Meilleur moyen de sortir d'un hub vers un système k-space
-async function leaveHub(hubId, target){
+async function leaveHub(hubId, target, pref){
   let best = null;
   const cand = c => { if (c && (!best || c.cost < best.cost)) best = c; };
-  if (hubId === HUB.turnur.id){ const g = await routeJumps(hubId, target); if (g != null) cand({ cost:g, legs:[`Gates: Turnur → ${nm(target)} (${g} jump${g > 1 ? 's' : ''})`] }); }
+  if (hubId === HUB.turnur.id){ const g = await routeJumps(hubId, target, pref); if (g != null) cand({ cost:g, legs:[`${pref === 'safe' ? 'Safest gates' : 'Gates'}: Turnur → ${nm(target)} (${g} jump${g > 1 ? 's' : ''})`] }); }
   const exits = hubConns(hubId).filter(c => isKcls(c.cls));
-  const gs = await pool(exits.map(c => async () => ({ c, g:await routeJumps(c.sys, target) })));
-  for (const { c, g } of gs) if (g != null) cand({ cost:1 + g, legs:[`Wormhole: ${nm(hubId)} → ${c.name} (sig ${c.outSig || '?'}, max ${c.size})`, g ? `Gates: ${c.name} → ${nm(target)} (${g} jump${g > 1 ? 's' : ''})` : null].filter(Boolean) });
+  const gs = await pool(exits.map(c => async () => ({ c, g:await routeJumps(c.sys, target, pref) })));
+  for (const { c, g } of gs) if (g != null) cand({ cost:1 + g, legs:[`Wormhole: ${nm(hubId)} → ${c.name} (sig ${c.outSig || '?'}, max ${c.size})`, g ? `${pref === 'safe' ? 'Safest gates' : 'Gates'}: ${c.name} → ${nm(target)} (${g} jump${g > 1 ? 's' : ''})` : null].filter(Boolean) });
+  return best;
+}
+// From one hub to the other: out through a wormhole of the first, stargates, in through a wormhole of the second
+const hubLinkCache = {};
+async function hubToHub(fromId, toId, pref){
+  const key = (pref || '') + fromId + '>' + toId + '|' + hubData.t;
+  if (key in hubLinkCache) return hubLinkCache[key];
+  const fromEx = hubConns(fromId).filter(c => isKcls(c.cls)), toEx = hubConns(toId).filter(c => isKcls(c.cls));
+  const starts = fromEx.map(c => ({ sys:c.sys, cost:1, leg:`Wormhole: ${nm(fromId)} → ${c.name} (sig ${c.outSig || '?'}, max ${c.size})` }));
+  if (fromId === HUB.turnur.id) starts.push({ sys:fromId, cost:0, leg:null });   // Turnur is k-space: you can also leave it by its stargates
+  const ends = toEx.map(c => ({ sys:c.sys, cost:1, leg:`Wormhole: ${c.name} → ${nm(toId)} (sig ${c.inSig || '?'}, max ${c.size})` }));
+  if (toId === HUB.turnur.id) ends.push({ sys:toId, cost:0, leg:null });
+  const pairs = []; for (const a of starts) for (const b of ends) pairs.push([a, b]);
+  const gs = await pool(pairs.map(([a, b]) => async () => ({ a, b, g:await routeJumps(a.sys, b.sys, pref) })));
+  let best = null;
+  for (const { a, b, g } of gs) if (g != null){ const cost = a.cost + g + b.cost; if (!best || cost < best.cost) best = { cost, legs:[a.leg, g ? `${pref === 'safe' ? 'Safest gates' : 'Gates'}: ${nm(a.sys)} → ${nm(b.sys)} (${g} jump${g > 1 ? 's' : ''})` : null, b.leg].filter(Boolean) }; }
+  if (best || !routeFails) hubLinkCache[key] = best;
   return best;
 }
 let hubTab = 'thera', hubCalc = {}, hubRoutes = null, hubBusy = false, hubOpen = null;
@@ -1329,31 +1348,33 @@ function renderHubCard(){
   const now = Date.now();
   if (hubTab === 'hubs'){
     const dests = HUB_TRADE();
-    box.innerHTML = `<p class="note">Routes from ${origin ? `<b>${esc(origin)}</b> (your current system, updated after each jump)` : 'your location'}: by stargates, or through Thera or Turnur. A wormhole jump counts as 1.</p>
+    box.innerHTML = `<p class="note">Routes from ${origin ? `<b>${esc(origin)}</b> (your current system, updated after each jump)` : 'your location'}: by stargates, through Thera, through Turnur, or chaining both. A wormhole jump counts as 1.</p>
       <div class="row"><button type="button" class="small" id="hubCalcRoutes"${hubBusy || !origin ? ' disabled' : ''}>${hubBusy ? 'Calculating…' : 'Recalculate'}</button>${origin ? '' : '<span class="note">Log in a character that is on the map.</span>'}</div>
-      ${hubRoutes ? `<table class="htable"><thead><tr><th>Hub</th><th class="r">Gates</th><th class="r">Via Thera</th><th class="r">Via Turnur</th></tr></thead><tbody>${dests.map(d => {
-        const r = hubRoutes[d.id] || {}; const vals = [r.direct, r.thera, r.turnur].map(x => x ? x.cost : null);
-        const min = Math.min(...vals.filter(v => v != null));
-        const cell = v => v == null ? '<td class="r dim">–</td>' : `<td class="r mono${v === min ? ' best' : ''}">${v}</td>`;
+      ${hubRoutes ? `<table class="htable"><thead><tr><th>Hub</th><th>Shortest</th><th class="r">Jumps</th><th>Safest</th><th class="r">Jumps</th></tr></thead><tbody>${dests.map(d => {
+        const r = hubRoutes[d.id] || {}, a = r.short, b = r.safe;
         const open = hubOpen === 'h' + d.id;
-        return `<tr class="clk${open ? ' open' : ''}" data-hopen="h${d.id}"><td><b>${esc(d.name)}</b></td>${vals.map(cell).join('')}</tr>${open ? `<tr><td colspan="4">${['direct', 'thera', 'turnur'].filter(k => r[k]).map(k => `<div class="legs"><b>${k === 'direct' ? 'By stargates' : k === 'thera' ? 'Via Thera' : 'Via Turnur'}: ${r[k].cost} jumps</b>${r[k].legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>`).join('') || '<span class="dim">No route found.</span>'}</td></tr>` : ''}`;
-      }).join('')}</tbody></table><p class="note">Click a row to see the route details. Green: shortest.</p>` : ''}`;
+        const cells = x => x ? `<td>${esc(x.how)}</td><td class="r mono best">${x.cost}</td>` : '<td class="dim">No route</td><td class="r dim">–</td>';
+        return `<tr class="clk${open ? ' open' : ''}" data-hopen="h${d.id}"><td><b>${esc(d.name)}</b></td>${cells(a)}${cells(b)}</tr>${open ? `<tr><td colspan="5">${a ? `<div class="legs"><b>Shortest: ${a.cost} jumps (${esc(a.how)})</b>${a.legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>` : ''}${b ? `<div class="legs"><b>Safest: ${b.cost} jumps (${esc(b.how)})</b>${b.legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>` : ''}</td></tr>` : ''}`;
+      }).join('')}</tbody></table><p class="note">Shortest = fewest jumps. Safest = stargate legs stay in high-sec as much as CCP's "safer" routing allows (wormhole jumps still count). Click a row for both detailed paths.</p>` : ''}`;
   } else {
-    const hub = HUB[hubTab], conns = hubConns(hub.id).sort((a, b) => (hubCalc[b.sid] ? 0 : 0) || String(a.name).localeCompare(String(b.name)));
+    const hub = HUB[hubTab], jv = c => { const j = hubCalc[c.sid]; return j ? j.cost : j === null ? 1e6 : 1e7; };
+    const conns = hubConns(hub.id).sort((a, b) => (jv(a) - jv(b)) || String(a.name).localeCompare(String(b.name)));   // closest first
     const onMap = !!map.nodes[hub.id];
-    const reach = hubCalc['hub' + hub.id];
+    const reach = hubCalc['hub' + hub.id], via = hubCalc['via' + hub.id], otherName = hub.id === HUB.thera.id ? 'Turnur' : 'Thera';
     box.innerHTML = `<div class="row"><button type="button" class="small" id="hubGo">${onMap ? 'Center on ' + hub.name : 'Add ' + hub.name + ' to the map'}</button>
         <button type="button" class="small" id="hubCalcJ"${hubBusy || !origin ? ' disabled' : ''}>${hubBusy ? 'Calculating…' : 'Recalculate'}</button></div>
-      ${origin ? `<p class="note">Jumps counted from <b>${esc(origin)}</b>${who ? ' (' + esc(who) + ')' : ''}, your current system. Updated after each jump.</p>` : '<p class="note">Log in a character that is on the map to count the jumps.</p>'}
+      ${origin ? `<p class="note">Jumps to each exit counted from <b>${esc(origin)}</b>${who ? ' (' + esc(who) + ')' : ''}, your current system, without going through Thera or Turnur. Updated after each jump.</p>` : '<p class="note">Log in a character that is on the map to count the jumps.</p>'}
       ${reach !== undefined ? `<div class="routebox">${reach ? `Reach <b>${hub.name}</b> from ${esc(who || origin)}: <b>${reach.cost} jump${reach.cost > 1 ? 's' : ''}</b><div class="legs">${reach.legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>` : `No route found to ${hub.name} from your location.`}</div>` : ''}
+      ${via && (!reach || via.cost < reach.cost) ? `<div class="routebox" style="border-left-color:var(--drift)">${via ? `Reach <b>${hub.name}</b> through ${otherName}: <b>${via.cost} jump${via.cost > 1 ? 's' : ''}</b>${reach && via.cost < reach.cost ? ' <span class="best">(shorter)</span>' : ''}<div class="legs">${via.legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>` : `No route to ${hub.name} through ${otherName}.`}</div>` : ''}
       ${conns.length ? `<table class="htable"><thead><tr><th>Exit</th><th>Size</th><th>Left</th><th class="r">Jumps</th></tr></thead><tbody>${conns.map(c => {
         const rem = c.expires ? (c.expires - now) / 60000 : null;
         const j = hubCalc[c.sid]; const open = hubOpen === c.sid;
         return `<tr class="clk${open ? ' open' : ''}" data-hopen="${esc(c.sid)}"><td><b>${esc(c.name)}</b> <span class="dim">${esc(String(c.cls).toUpperCase())}</span><br><span class="dim">${esc(c.region)}</span></td><td class="mono">${esc(c.size)}</td>
           <td class="mono ${rem != null && rem < 240 ? 'exp-eol' : rem != null && rem < 480 ? 'exp-soon' : ''}">${rem != null ? fmtDur(rem) : '?'}</td>
-          <td class="r mono">${j === undefined ? '·' : j ? j.cost : '–'}</td></tr>${open ? `<tr><td colspan="4"><div class="legs"><span>Signatures: ${esc(c.outSig || '?')} (${hub.name}) → ${esc(c.inSig || '?')} (${esc(c.name)})${c.wh ? ' · type ' + esc(c.wh) : ''}</span>${j ? `<b>From your location: ${j.cost} jumps</b>${j.legs.map(l => `<span>${esc(l)}</span>`).join('')}` : j === null ? '<span>No known route from your location.</span>' : '<span>Calculating…</span>'}</div>${map.nodes[c.sys] ? `<button type="button" class="small" data-hfocus="${c.sys}">Show on map</button>` : ''}</td></tr>` : ''}`;
+          <td class="r mono">${j === undefined ? '·' : j ? j.cost : '–'}</td></tr>${open ? `<tr><td colspan="4"><div class="legs"><span>Signatures: ${esc(c.outSig || '?')} (${hub.name}) → ${esc(c.inSig || '?')} (${esc(c.name)})${c.wh ? ' · type ' + esc(c.wh) : ''}</span>${j ? `<b>From your location: ${j.cost} jumps</b>${j.legs.map(l => `<span>${esc(l)}</span>`).join('')}` : j === null ? '<span>No known route from your location without going through Thera or Turnur (wormhole system not on your chain).</span>' : '<span>Calculating…</span>'}</div>${map.nodes[c.sys] ? `<button type="button" class="small" data-hfocus="${c.sys}">Show on map</button>` : ''}</td></tr>` : ''}`;
       }).join('')}</tbody></table>` : '<span class="empty">No published connection right now.</span>'}
-      <p class="note">Updated ${fmtDur((now - hubData.t) / 60000)} ago. Click an exit for details.</p>`;
+      ${hubCalc['fail' + hub.id] ? `<p class="badline">CCP did not answer ${hubCalc['fail' + hub.id]} route request(s): some numbers may be too high. Click Recalculate in a moment.</p>` : ''}
+      <p class="note">Closest exits first. Updated ${fmtDur((now - hubData.t) / 60000)} ago. Click an exit for the detailed path.</p>`;
     $('#hubGo').addEventListener('click', () => gotoHub(hubTab));
     $('#hubCalcJ').addEventListener('click', () => calcHubJumps(hubTab, true));
   }
@@ -1375,19 +1396,23 @@ async function calcHubJumps(key, manual){
   const hub = HUB[key]; if (!hub || hubBusy) return;
   const conns = hubConns(hub.id), stamp = calcKey();
   hubBusy = true; renderHubCard();
-  const res = {};
+  const res = {}; routeFails = 0;
   try{
     const r = await reachHub(hub.id); res['hub' + hub.id] = r;
+    // and through the other hub
+    const otherId = hub.id === HUB.thera.id ? HUB.turnur.id : HUB.thera.id;
+    const rO = await reachHub(otherId), link = rO ? await hubToHub(otherId, hub.id) : null;
+    res['via' + hub.id] = rO && link ? { cost:rO.cost + link.cost, legs:[...rO.legs, ...link.legs] } : null;
     const ks = conns.filter(c => isKcls(c.cls));
-    const rs = await pool(ks.map(c => async () => ({ c, r:await reachK(c.sys) })));
-    for (const { c, r:rk } of rs){
-      const viaHub = r ? { cost:r.cost + 1, legs:[...r.legs, `Wormhole: ${hub.name} → ${c.name} (sig ${c.outSig || '?'})`] } : null;
-      res[c.sid] = rk && (!viaHub || rk.cost <= viaHub.cost) ? rk : viaHub;
-    }
-    for (const c of conns.filter(c => !isKcls(c.cls))){ const p = me.current != null && map.nodes[c.sys] ? findPath(me.current, c.sys) : null; res[c.sid] = p && !p.none ? { cost:p.ids.length - 1, legs:[`Map: ${p.ids.map(nm).join(' → ')}`] } : (r ? { cost:r.cost + 1, legs:[...r.legs, `Wormhole: ${hub.name} → ${c.name}`] } : null); }
+    // distance to each exit WITHOUT going through Thera / Turnur: by stargates, or along your chain
+    const avoid = new Set(HUB_IDS.map(String));
+    const rs = await pool(ks.map(c => async () => ({ c, r:await reachK(c.sys, avoid) })));
+    for (const { c, r:rk } of rs) res[c.sid] = rk || null;
+    for (const c of conns.filter(c => !isKcls(c.cls))){ const p = me.current != null && map.nodes[c.sys] ? findPath(me.current, c.sys, avoid) : null; res[c.sid] = p && !p.none ? { cost:p.ids.length - 1, legs:[`Map: ${p.ids.map(nm).join(' → ')}`] } : null; }
     // drop results of the other hub's previous position, keep this hub's fresh ones
     for (const c of conns) delete hubCalc[c.sid];
     Object.assign(hubCalc, res); hubCalcFor[key] = stamp;
+    hubCalc['fail' + hub.id] = routeFails;
   }catch(e){ if (manual) toast('Calculation failed: ' + e.message, true); hubCalcFor[key] = stamp; }
   hubBusy = false; renderHubCard();
 }
@@ -1397,11 +1422,20 @@ async function calcHubRoutes(manual){
   hubBusy = true; renderHubCard();
   try{
     const res = {};
-    const [toThera, toTurnur] = [await reachHub(HUB.thera.id), await reachHub(HUB.turnur.id)];
-    for (const d of HUB_TRADE()){
-      const direct = await reachK(d.id);
-      const [lt, lu] = [await leaveHub(HUB.thera.id, d.id), await leaveHub(HUB.turnur.id, d.id)];
-      res[d.id] = { direct, thera:toThera && lt ? { cost:toThera.cost + lt.cost, legs:[...toThera.legs, ...lt.legs] } : null, turnur:toTurnur && lu ? { cost:toTurnur.cost + lu.cost, legs:[...toTurnur.legs, ...lu.legs] } : null };
+    const join = (...parts) => parts.every(Boolean) ? { cost:parts.reduce((s, x) => s + x.cost, 0), legs:parts.flatMap(x => x.legs) } : null;
+    const bestOf = o => { const k = ['direct', 'thera', 'turnur', 'both'].filter(k => o[k]).sort((a, b) => o[a].cost - o[b].cost)[0]; return k ? { ...o[k], how:k === 'both' ? 'Via ' + o.both.order : { direct:'By stargates', thera:'Via Thera', turnur:'Via Turnur' }[k] } : null; };
+    for (const pref of ['short', 'safe']){
+      const P = pref === 'safe' ? 'safe' : undefined;
+      const [toThera, toTurnur] = [await reachHub(HUB.thera.id, P), await reachHub(HUB.turnur.id, P)];
+      const thTu = await hubToHub(HUB.thera.id, HUB.turnur.id, P), tuTh = await hubToHub(HUB.turnur.id, HUB.thera.id, P);
+      for (const d of HUB_TRADE()){
+        const direct = await reachK(d.id, null, P);
+        const [lt, lu] = [await leaveHub(HUB.thera.id, d.id, P), await leaveHub(HUB.turnur.id, d.id, P)];
+        // chaining both hubs: Thera then Turnur, or Turnur then Thera (the shorter one is kept)
+        const a = join(toThera, thTu, lu), b = join(toTurnur, tuTh, lt);
+        const both = a && (!b || a.cost <= b.cost) ? { ...a, order:'Thera → Turnur' } : b ? { ...b, order:'Turnur → Thera' } : null;
+        (res[d.id] = res[d.id] || {})[pref] = bestOf({ direct, thera:join(toThera, lt), turnur:join(toTurnur, lu), both });
+      }
     }
     hubRoutes = res;
   }catch(e){ if (manual) toast('Calculation failed: ' + e.message, true); }
@@ -2447,12 +2481,12 @@ function centerOnSel(id){
   applyView();
 }
 /* Chemin le plus court sur les connexions de la carte (BFS) */
-function findPath(from, to){
+function findPath(from, to, avoid){
   if (from == null || to == null || !map.nodes[from] || !map.nodes[to]) return null;
   from = String(from); to = String(to);
   if (from === to) return { ids:[from], links:[] };
   const adj = {};
-  for (const l of linksArr()){ const a = String(l.a), b = String(l.b); if (!map.nodes[a] || !map.nodes[b]) continue; (adj[a] = adj[a] || []).push([b, l.id]); (adj[b] = adj[b] || []).push([a, l.id]); }
+  for (const l of linksArr()){ const a = String(l.a), b = String(l.b); if (!map.nodes[a] || !map.nodes[b]) continue; if (avoid && (avoid.has(a) || avoid.has(b))) continue; (adj[a] = adj[a] || []).push([b, l.id]); (adj[b] = adj[b] || []).push([a, l.id]); }
   const prev = { [from]:null }, q = [from];
   while (q.length){
     const u = q.shift(); if (u === to) break;
@@ -2747,7 +2781,7 @@ function renderLinkPanel(box){
 let exitsResult = {};
 let shipDraft = null;
 function renderExits(){
-  const box = $('#exitsBody');
+  const box = $('#exitsBody'); if (!box) return;
   const exits = Object.values(map.nodes).filter(n => n && isK(n.cls) && isRealId(n.id));
   if (!exits.length){ box.className = 'empty'; box.innerHTML = demoMode ? 'Routes are not calculated in demo mode.' : 'No k-space system on the map.'; return; }
   box.className = '';
