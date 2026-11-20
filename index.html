@@ -249,7 +249,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v4.9</span>
+  <span class="ver" id="appVersion" title="Map version">v5.0</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -419,10 +419,10 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
   <div class="mbox">
     <h2 id="helpTitle">Help and setup</h2>
     <div class="tabs" role="tablist">
-      <button type="button" role="tab" data-tab="h-use" aria-selected="true">Utilisation</button>
+      <button type="button" role="tab" data-tab="h-use" aria-selected="true">Using the map</button>
       <button type="button" role="tab" data-tab="h-gh" aria-selected="false">Publish online</button>
       <button type="button" role="tab" data-tab="h-fb" aria-selected="false">Secure sharing</button>
-      <button type="button" role="tab" data-tab="h-eve" aria-selected="false">Application EVE</button>
+      <button type="button" role="tab" data-tab="h-eve" aria-selected="false">EVE application</button>
     </div>
     <div id="h-use" class="tabpane">
       <ol>
@@ -659,7 +659,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '4.9';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '5.0';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -690,6 +690,9 @@ const store = {
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
   del(k){ try{ localStorage.removeItem(k); }catch(e){} }
 };
+/* Demo-only link (…/?demo): plays the demo, nothing can be logged in, configured or saved */
+const DEMO_ONLY = /[?&]demo\b/.test(location.search);
+if (DEMO_ONLY){ store.set = () => {}; store.del = () => {}; }
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtInt = n => Math.round(n).toLocaleString('en-US');
@@ -699,7 +702,7 @@ const parseKg = s => { const v = Number(String(s || '').replace(/[\s  ,.]/g, 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const callbackUrl = location.origin + location.pathname.replace(/index\.html$/, '');
 
-let cfg = Object.assign({ clientId:'', poll:5, home:null, ships:[], cloud:{ worker:'', db:'', apiKey:'' } }, store.get(K.cfg, {}));
+let cfg = Object.assign({ clientId:'', poll:5, home:null, ships:[], cloud:{ worker:'', db:'', apiKey:'' } }, DEMO_ONLY ? {} : store.get(K.cfg, {}));
 if (!cfg.cloud) cfg.cloud = { worker:'', db:'', apiKey:'' };
 /* ---------- Un personnage par onglet ----------
    Chaque onglet retient « son » personnage (sessionStorage). Les jetons de tous les personnages connectés
@@ -730,10 +733,10 @@ function vaultChars(){
 let tabChar = Number(sess.get('whmap.tabChar')) || null;
 if (!tabChar || !store.get(CK.tok + tabChar, null)){ const last = store.get('whmap.lastChar', null); tabChar = last && store.get(CK.tok + last, null) ? last : null; }
 if (tabChar) sess.set('whmap.tabChar', String(tabChar));
-let tok = tabChar ? store.get(CK.tok + tabChar, null) : null;
+let tok = tabChar && !DEMO_ONLY ? store.get(CK.tok + tabChar, null) : null;
 let me = (tabChar && store.get(CK.me + tabChar, null)) || { current:null };
 if (!me.alts) me.alts = {};
-let alts = (tabChar && store.get(CK.alts + tabChar, null)) || [];   // personnages supplémentaires de ce personnage
+let alts = (!DEMO_ONLY && tabChar && store.get(CK.alts + tabChar, null)) || [];   // personnages supplémentaires de ce personnage
 let slot = (tabChar && store.get(CK.slot + tabChar, null)) || { mapOwner:'' };
 delete cfg.mapOwner;   // le choix de carte est maintenant propre à chaque personnage
 const altState = {};                          // état en direct par personnage supplémentaire
@@ -766,7 +769,7 @@ function toast(msg, err){
   const t = $('#toast'); t.textContent = msg; t.className = err ? 'err' : ''; t.style.display = 'block';
   clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', err ? 6500 : 3000);
 }
-function saveCfg(){ store.set(K.cfg, cfg); if (tok) store.set(CK.slot + tok.charId, slot); }
+function saveCfg(){ if (DEMO_ONLY) return; store.set(K.cfg, cfg); if (tok) store.set(CK.slot + tok.charId, slot); }
 function saveMe(){ if (tok) store.set(CK.me + tok.charId, me); }
 function saveTok(){ if (tok){ store.set(CK.tok + tok.charId, tok); } }
 
@@ -2003,7 +2006,7 @@ function startDemo(){
   };
   step();
   demoTimer = setInterval(step, 2000);
-  $('#btnDemo').textContent = 'Exit demo';
+  $('#btnDemo').textContent = DEMO_ONLY ? 'Replay demo' : 'Exit demo';
   $('#pTrack').textContent = 'Demo running';
   $('#pName').textContent = 'Demo pilot';
 }
@@ -2013,7 +2016,7 @@ function stopDemo(){
   if (savedBeforeDemo){ map = savedBeforeDemo.map; me.current = savedBeforeDemo.current; hubData = savedBeforeDemo.hubs || hubData; savedBeforeDemo = null; }
   hubCalc = {}; hubRoutes = null; renderHubCard();
   pilot.online = false; pilot.ship = '';
-  $('#btnDemo').textContent = 'Demo mode';
+  $('#btnDemo').textContent = DEMO_ONLY ? 'Replay demo' : 'Demo mode';
   sel = null; connectShared(); renderAll(); center();
   if (tok && cfg.clientId) startTracking(); else $('#pTrack').textContent = 'Stopped';
 }
@@ -3015,7 +3018,7 @@ function refreshShareUi(){
   $('#shareState').textContent = !cloudReady() ? 'Local map: only visible in this browser.'
     : (fb ? `Secure sharing active, logged in as ${fb.name}.` : 'Sharing configured: log in with EVE to enable it.');
 }
-function openSetup(){
+function openSetup(){ if (DEMO_ONLY) return;
   $('#cbUrl').textContent = callbackUrl; $('#clientId').value = cfg.clientId || ''; $('#pollSel').value = String(cfg.poll || 5);
   $('#cWorker').value = cfg.cloud.worker || ''; $('#cDb').value = cfg.cloud.db || ''; $('#cKey').value = cfg.cloud.apiKey || '';
   $('#homeName').value = cfg.home ? cfg.home.name : '';
@@ -3144,6 +3147,20 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeSetup(
    ========================================================= */
 (async () => {
   $('#appVersion').textContent = 'v' + APP_VERSION; $('#appVersion').title = `Version ${APP_VERSION} of ${APP_DATE}`;
+  if (DEMO_ONLY){
+    // view-only demo: no login, no settings, no access management, no own map
+    document.body.classList.add('demo-only');
+    ['#btnLogin', '#btnSetup', '#btnAccess', '#btnClear', '#addForm', '#altsBox', '#btnAddAlt'].forEach(q => { const e = $(q); if (e) e.hidden = true; });
+    const cs = $('#charSel'); if (cs) cs.closest('label').hidden = true;
+    document.querySelectorAll('#help [data-tab]').forEach(t => { if (t.dataset.tab !== 'h-use') t.hidden = true; });
+    const bd = $('#btnDemo'); bd.replaceWith(bd.cloneNode(true)); $('#btnDemo').textContent = 'Replay demo';
+    $('#btnDemo').addEventListener('click', () => { if (demoMode) stopDemo(); startDemo(); });
+    renderAll(); loadWhData();
+    setInterval(() => { if (!drag) render(); renderPilots(); renderKillAlarms(); }, 30000);
+    startDemo(); $('#btnDemo').textContent = 'Replay demo';
+    setSync('', 'Demo · view only');
+    return;
+  }
   handleConfigLink();
   await handleCallback();
   if (tok && cloudReady() && (!fb || fb.uid !== 'eve-' + tok.charId)){
