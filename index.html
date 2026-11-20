@@ -194,6 +194,11 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
           <div class="dim" id="pStatus"><span class="dot"></span>Hors ligne</div>
         </div>
       </div>
+      <div id="charSwitch" class="row" hidden>
+        <label class="f" style="flex:1">Personnage de cet onglet
+          <select id="charSel"></select>
+        </label>
+      </div>
       <dl class="kv">
         <dt>Système</dt><dd id="pSys">–</dd>
         <dt>Vaisseau</dt><dd id="pShip">–</dd>
@@ -560,15 +565,46 @@ const parseKg = s => { const v = Number(String(s || '').replace(/[\s  ,.]/g, 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const callbackUrl = location.origin + location.pathname.replace(/index\.html$/, '');
 
-let cfg = Object.assign({ clientId:'', poll:5, home:null, ships:[], cloud:{ worker:'', db:'', apiKey:'' }, mapOwner:'' }, store.get(K.cfg, {}));
+let cfg = Object.assign({ clientId:'', poll:5, home:null, ships:[], cloud:{ worker:'', db:'', apiKey:'' } }, store.get(K.cfg, {}));
 if (!cfg.cloud) cfg.cloud = { worker:'', db:'', apiKey:'' };
-let tok = store.get(K.tok, null);
-let me = store.get(K.me, { current:null });
+/* ---------- Un personnage par onglet ----------
+   Chaque onglet retient « son » personnage (sessionStorage). Les jetons de tous les personnages connectés
+   sont rangés dans le navigateur sous des clés propres à chaque personnage. */
+const sess = {
+  get(k){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } },
+  set(k, v){ try{ sessionStorage.setItem(k, v); }catch(e){} },
+  del(k){ try{ sessionStorage.removeItem(k); }catch(e){} }
+};
+const CK = { tok:'whmap.tok.', fb:'whmap.fb.', me:'whmap.me.', alts:'whmap.alts.', slot:'whmap.slot.' };
+(function migrateOld(){   // ancienne version : un seul personnage pour tout le navigateur
+  const old = store.get(K.tok, null);
+  if (!old || !old.charId) return;
+  const id = old.charId;
+  if (!store.get(CK.tok + id, null)) store.set(CK.tok + id, old);
+  const f = store.get(K.fb, null); if (f) store.set(CK.fb + id, f);
+  const m = store.get(K.me, null); if (m) store.set(CK.me + id, m);
+  const a = store.get(K.alts, null); if (a) store.set(CK.alts + id, a);
+  const c = store.get(K.cfg, {}); if (c && c.mapOwner) store.set(CK.slot + id, { mapOwner:c.mapOwner });
+  [K.tok, K.fb, K.me, K.alts].forEach(k => store.del(k));
+  store.set('whmap.lastChar', id);
+})();
+function vaultChars(){
+  const out = [];
+  try{ for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith(CK.tok)){ const t = store.get(k, null); if (t && t.charId) out.push({ charId:t.charId, charName:t.charName }); } } }catch(e){}
+  return out.sort((a, b) => String(a.charName).localeCompare(String(b.charName)));
+}
+let tabChar = Number(sess.get('whmap.tabChar')) || null;
+if (!tabChar || !store.get(CK.tok + tabChar, null)){ const last = store.get('whmap.lastChar', null); tabChar = last && store.get(CK.tok + last, null) ? last : null; }
+if (tabChar) sess.set('whmap.tabChar', String(tabChar));
+let tok = tabChar ? store.get(CK.tok + tabChar, null) : null;
+let me = (tabChar && store.get(CK.me + tabChar, null)) || { current:null };
 if (!me.alts) me.alts = {};
-let alts = store.get(K.alts, []);            // personnages supplémentaires : jetons EVE
+let alts = (tabChar && store.get(CK.alts + tabChar, null)) || [];   // personnages supplémentaires de ce personnage
+let slot = (tabChar && store.get(CK.slot + tabChar, null)) || { mapOwner:'' };
+delete cfg.mapOwner;   // le choix de carte est maintenant propre à chaque personnage
 const altState = {};                          // état en direct par personnage supplémentaire
 let myMulti = false;                          // droit « multi-personnages » sur la carte affichée
-const saveAlts = () => store.set(K.alts, alts);
+const saveAlts = () => { if (tok) store.set(CK.alts + tok.charId, alts); };
 let map = emptyMap();
 let view = { x:0, y:0, k:1 };
 let sel = null;
@@ -596,19 +632,20 @@ function toast(msg, err){
   const t = $('#toast'); t.textContent = msg; t.className = err ? 'err' : ''; t.style.display = 'block';
   clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', err ? 6500 : 3000);
 }
-function saveCfg(){ store.set(K.cfg, cfg); }
-function saveMe(){ store.set(K.me, me); }
+function saveCfg(){ store.set(K.cfg, cfg); if (tok) store.set(CK.slot + tok.charId, slot); }
+function saveMe(){ if (tok) store.set(CK.me + tok.charId, me); }
+function saveTok(){ if (tok){ store.set(CK.tok + tok.charId, tok); } }
 
 /* =========================================================
    Stockage : local ou partagé (Firebase Realtime Database, REST + flux)
    ========================================================= */
 const cloudReady = () => !!(cfg.cloud && cfg.cloud.worker && cfg.cloud.db && cfg.cloud.apiKey);
-let fb = store.get(K.fb, null);           // jeton Firebase : { idToken, refresh, exp, uid, name }
+let fb = tok ? store.get(CK.fb + tok.charId, null) : null;   // jeton Firebase du personnage de cet onglet
 let myRole = 'owner';                     // owner | edit | view
-const shared = () => cloudReady() && !!fb && !!cfg.mapOwner && !demoMode;
+const shared = () => cloudReady() && !!fb && !!slot.mapOwner && !demoMode;
 const dbRoot = () => cfg.cloud.db.replace(/\/+$/, '');
-const mapBase = () => `${dbRoot()}/maps/${cfg.mapOwner}`;
-const cacheKey = () => shared() ? 'whmap.cache.' + cfg.mapOwner : K.map;
+const mapBase = () => `${dbRoot()}/maps/${slot.mapOwner}`;
+const cacheKey = () => shared() ? 'whmap.cache.' + slot.mapOwner : K.map;
 const remotePath = p => p.startsWith('pilots') ? p : 'data/' + p;
 const canEdit = () => !shared() || myRole !== 'view';
 let streams = [], persistT = null, renderT = null, reconnectT = null, roToast = 0;
@@ -638,8 +675,8 @@ async function cloudLogin(){
   const sj = await s2.json().catch(() => ({}));
   if (!s2.ok) throw new Error('Firebase refuse la connexion : vérifiez la Clé API Web et que Authentication est activé (' + ((sj.error && sj.error.message) || s2.status) + ').');
   fb = { idToken:sj.idToken, refresh:sj.refreshToken, exp:Date.now() + Number(sj.expiresIn || 3600) * 1000, uid:j.uid, name:j.name };
-  store.set(K.fb, fb);
-  if (!cfg.mapOwner) cfg.mapOwner = fb.uid;
+  store.set(CK.fb + tok.charId, fb);
+  if (!slot.mapOwner) slot.mapOwner = fb.uid;
   saveCfg();
   fbReq('PUT', `maps/${fb.uid}/ownerName`, fb.name).catch(() => {});
   $('#btnAccess').hidden = false;
@@ -650,10 +687,10 @@ async function ensureFb(){
   if (Date.now() < fb.exp - 120000) return;
   const r = await fetch(`https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(cfg.cloud.apiKey)}`,
     { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body:new URLSearchParams({ grant_type:'refresh_token', refresh_token:fb.refresh }) });
-  if (!r.ok){ fb = null; store.del(K.fb); throw new Error('Session de partage expirée, reconnectez-vous avec EVE.'); }
+  if (!r.ok){ fb = null; if (tok) store.del(CK.fb + tok.charId); throw new Error('Session de partage expirée, reconnectez-vous avec EVE.'); }
   const j = await r.json();
   fb.idToken = j.id_token; fb.refresh = j.refresh_token; fb.exp = Date.now() + Number(j.expires_in || 3600) * 1000;
-  store.set(K.fb, fb);
+  if (tok) store.set(CK.fb + tok.charId, fb);
 }
 async function fbReq(method, path, body){
   await ensureFb();
@@ -664,7 +701,7 @@ async function fbReq(method, path, body){
 }
 async function remote(method, path, body){
   if (!shared()) return;
-  try{ await fbReq(method, `maps/${cfg.mapOwner}/${remotePath(path)}`, body); }
+  try{ await fbReq(method, `maps/${slot.mapOwner}/${remotePath(path)}`, body); }
   catch(e){
     if (e.status === 401 || e.status === 403){ setSync('err', 'Écriture refusée'); toast(myRole === 'view' ? 'Vous avez un accès en lecture seule à cette carte.' : 'La base a refusé la modification : votre accès a peut-être été retiré.', true); }
     else setSync('err', 'Partage : erreur d\'écriture');
@@ -699,17 +736,17 @@ async function connectShared(){
   setSync('', 'Connexion au partage…');
   // Rôle sur la carte affichée
   myMulti = false;
-  if (cfg.mapOwner === fb.uid){ myRole = 'owner'; mapOwnerName = fb.name; }
+  if (slot.mapOwner === fb.uid){ myRole = 'owner'; mapOwnerName = fb.name; }
   else {
     try{
-      const acl = await fbReq('GET', `maps/${cfg.mapOwner}/acl/${fb.uid}`);
+      const acl = await fbReq('GET', `maps/${slot.mapOwner}/acl/${fb.uid}`);
       if (!acl){ throw Object.assign(new Error('x'), { status:403 }); }
       myRole = acl.role === 'edit' ? 'edit' : 'view';
       myMulti = acl.multi === true;
-      mapOwnerName = await fbReq('GET', `maps/${cfg.mapOwner}/ownerName`).catch(() => '') || '';
+      mapOwnerName = await fbReq('GET', `maps/${slot.mapOwner}/ownerName`).catch(() => '') || '';
     }catch(e){
       toast('Vous n\'avez plus accès à cette carte. Retour à votre propre carte.', true);
-      cfg.mapOwner = fb.uid; saveCfg(); return connectShared();
+      slot.mapOwner = fb.uid; saveCfg(); return connectShared();
     }
   }
   let firstData = true;
@@ -915,9 +952,8 @@ async function handleCallback(){
       alts = alts.filter(a => a.charId !== t.charId).concat([t]); saveAlts();
       toast('Personnage ajouté : ' + t.charName);
     } else {
-      tok = t; store.set(K.tok, tok);
-      alts = alts.filter(a => a.charId !== t.charId); saveAlts();
-      toast('Connecté : ' + tok.charName);
+      switchTabChar(t.charId, t);
+      toast('Connecté : ' + tok.charName + ' (dans cet onglet)');
     }
   }
   catch(e){ toast(e.message, true); }
@@ -925,13 +961,25 @@ async function handleCallback(){
 async function ensureToken(){
   if (!tok) throw new Error('Non connecté');
   if (Date.now() < tok.exp - 60000) return;
-  tok = await tokenRequest({ grant_type:'refresh_token', refresh_token:tok.refresh_token, client_id:cfg.clientId });
-  store.set(K.tok, tok);
+  await withLock('whmap-tok-' + tok.charId, async () => {
+    const latest = store.get(CK.tok + tok.charId, null);          // un autre onglet l'a peut-être déjà renouvelé
+    if (latest && latest.exp > tok.exp) tok = latest;
+    if (Date.now() < tok.exp - 60000) return;
+    tok = await tokenRequest({ grant_type:'refresh_token', refresh_token:tok.refresh_token, client_id:cfg.clientId });
+    saveTok();
+  });
+}
+async function withLock(name, fn){
+  if (navigator.locks && navigator.locks.request) return navigator.locks.request(name, fn);
+  return fn();
 }
 async function ensureAltToken(a){
   if (Date.now() < a.exp - 60000) return;
-  Object.assign(a, await tokenRequest({ grant_type:'refresh_token', refresh_token:a.refresh_token, client_id:cfg.clientId }));
-  saveAlts();
+  await withLock('whmap-tok-' + a.charId, async () => {
+    if (Date.now() < a.exp - 60000) return;
+    Object.assign(a, await tokenRequest({ grant_type:'refresh_token', refresh_token:a.refresh_token, client_id:cfg.clientId }));
+    saveAlts();
+  });
 }
 async function esiAs(a, path){
   await ensureAltToken(a);
@@ -944,8 +992,23 @@ async function esiAs(a, path){
 const canMulti = () => !shared() || myRole === 'owner' || myMulti;
 function logout(){
   if (fb && shared()) remote('DELETE', `pilots/${fb.uid}`);
-  tok = null; store.del(K.tok); fb = null; store.del(K.fb); cfg.mapOwner = ''; saveCfg();
+  if (tok){ [CK.tok, CK.fb].forEach(k => store.del(k + tok.charId)); if (store.get('whmap.lastChar', null) === tok.charId) store.del('whmap.lastChar'); }
+  sess.del('whmap.tabChar');
+  tok = null; fb = null; tabChar = null; slot = { mapOwner:'' }; me = { current:null, alts:{} }; alts = [];
   stopTracking(); map = normalize(store.get(K.map, null)); connectShared(); renderAll();
+}
+/* Lie cet onglet à un personnage (déjà connecté dans le navigateur, ou qui vient de se connecter) puis recharge l'état */
+function switchTabChar(charId, newTok){
+  if (newTok) store.set(CK.tok + charId, newTok);
+  sess.set('whmap.tabChar', String(charId)); store.set('whmap.lastChar', charId);
+  tabChar = charId;
+  tok = store.get(CK.tok + charId, null);
+  fb = store.get(CK.fb + charId, null);
+  me = store.get(CK.me + charId, null) || { current:null }; if (!me.alts) me.alts = {};
+  alts = (store.get(CK.alts + charId, null) || []).filter(a => a.charId !== charId);
+  slot = store.get(CK.slot + charId, null) || { mapOwner:'' };
+  pilot.online = false; pilot.ship = ''; pilot.shipType = ''; lastOnlineCheck = 0; lastShipCheck = 0;
+  for (const k in altState) delete altState[k];
 }
 
 /* =========================================================
@@ -998,7 +1061,7 @@ async function tickAlts(){
         st.ship = sn ? `${sn} (${typeName})` : typeName; st.shipType = typeName;
       }
       const id = loc.solar_system_id;
-      if (id != null && st.current != id){
+      if (id != null && (st.current != id || (!map.nodes[id] && canEdit()))){
         const prev = st.current;
         await moveChar(prev, id, null, a.charName);
         st.current = id; me.alts[a.charId] = id; saveMe();
@@ -1056,7 +1119,7 @@ function addLink(a, b, gate){
   return id;
 }
 async function arriveAt(id, info){
-  if (id == null || me.current == id) return;
+  if (id == null || (me.current == id && (map.nodes[id] || !canEdit()))) return;
   const prev = me.current;
   await moveChar(prev, id, info, tok ? tok.charName : (demoMode ? 'Démo' : ''));
   me.current = id; saveMe();
@@ -1687,6 +1750,18 @@ function renderPilot(){
   const cur = map.nodes[me.current];
   $('#pSys').innerHTML = cur ? `<b>${esc(cur.name)}</b> <span class="dim">${esc((CLASS[cur.cls] || CLASS['?']).label)}</span>` : '–';
   $('#pShip').textContent = pilot.ship || '–';
+  // Choix du personnage de cet onglet
+  const vc = vaultChars();
+  $('#charSwitch').hidden = demoMode || (!vc.length);
+  if (!$('#charSwitch').hidden){
+    const cs = $('#charSel');
+    const wanted = (tok ? String(tok.charId) : '') + '|' + vc.map(c => c.charId).join(',');
+    if (cs.dataset.k !== wanted){
+      cs.dataset.k = wanted;
+      cs.innerHTML = (tok ? '' : '<option value="">Choisir…</option>') + vc.map(c => `<option value="${c.charId}">${esc(c.charName)}</option>`).join('') + '<option value="new">+ Connecter un autre personnage dans cet onglet…</option>';
+      cs.value = tok ? String(tok.charId) : '';
+    }
+  }
   // Autres personnages
   const box = $('#altsBox');
   box.hidden = !tok || demoMode;
@@ -1819,6 +1894,13 @@ $('#fileImport').addEventListener('change', async e => {
 });
 $('#btnLogin').addEventListener('click', () => tok ? logout() : login());
 $('#btnAddAlt').addEventListener('click', () => login(true));
+$('#charSel').addEventListener('change', async e => {
+  const v = e.target.value;
+  if (v === 'new'){ login(); return; }
+  if (!v || (tok && String(tok.charId) === v)) return;
+  sess.set('whmap.tabChar', v); store.set('whmap.lastChar', Number(v));
+  location.reload();
+});
 
 /* =========================================================
    Réglages et partage
@@ -1852,7 +1934,7 @@ $('#saveSetup').addEventListener('click', async () => {
   if (nc.db && !/^https:\/\/[^/]+\.(firebasedatabase\.app|firebaseio\.com)$/.test(nc.db)){ toast('L\'adresse Firebase doit se terminer par firebasedatabase.app.', true); return; }
   const changed = JSON.stringify(nc) !== JSON.stringify(cfg.cloud);
   cfg.cloud = nc;
-  if (changed){ fb = null; store.del(K.fb); cfg.mapOwner = ''; }
+  if (changed){ fb = null; vaultChars().forEach(c => store.del(CK.fb + c.charId)); slot.mapOwner = ''; }
   saveCfg(); closeSetup(); toast('Réglages enregistrés'); renderExits();
   if (tok && !demoMode) startTracking();
   if (changed && cloudReady() && tok){
@@ -1871,7 +1953,7 @@ function handleConfigLink(){
     const j = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((m[1].length + 3) % 4)), c => c.charCodeAt(0))));
     if (!j.w || !j.d || !j.k) throw 0;
     cfg.cloud = { worker:j.w, db:j.d, apiKey:j.k }; if (j.cid) cfg.clientId = j.cid;
-    fb = null; store.del(K.fb); cfg.mapOwner = ''; saveCfg();
+    fb = null; vaultChars().forEach(c => { store.del(CK.fb + c.charId); store.del(CK.slot + c.charId); }); slot.mapOwner = ''; saveCfg();
     toast('Carte configurée. Connectez-vous avec EVE : si le propriétaire vous a autorisé, sa carte apparaîtra dans « Accès ».');
   }catch(e){ toast('Lien d\'installation invalide.', true); }
 }
@@ -1886,7 +1968,7 @@ async function openAccess(){
     const acc = await fbReq('GET', `access/${fb.uid}`) || {};
     for (const owner in acc) sel.insertAdjacentHTML('beforeend', `<option value="${esc(owner)}">Carte de ${esc(acc[owner] && acc[owner].name || owner)}</option>`);
   }catch(e){}
-  sel.value = cfg.mapOwner || fb.uid;
+  sel.value = slot.mapOwner || fb.uid;
   const mine = sel.value === fb.uid;
   $('#aclBox').hidden = !mine;
   $('#mapRoleNote').textContent = mine ? 'Vous êtes propriétaire de cette carte.' : (myRole === 'edit' ? 'Vous pouvez modifier cette carte.' : 'Vous avez un accès en lecture seule à cette carte.');
@@ -1921,7 +2003,7 @@ $('#btnAccess').addEventListener('click', openAccess);
 $('#closeAccess').addEventListener('click', () => $('#access').classList.remove('open'));
 $('#btnCopyCfg').addEventListener('click', () => copyText($('#cfgLink').value, 'Lien copié'));
 $('#mapSel').addEventListener('change', async e => {
-  cfg.mapOwner = e.target.value; saveCfg(); sel = null; lastSelKey = '';
+  slot.mapOwner = e.target.value; saveCfg(); sel = null; lastSelKey = '';
   await connectShared(); renderAll(); center(); openAccess();
 });
 $('#aclForm').addEventListener('submit', async ev => {
@@ -1938,6 +2020,12 @@ $('#aclForm').addEventListener('submit', async ev => {
     await fbReq('PUT', `access/${uid}/${fb.uid}`, { name:fb.name, t:Date.now() });
     $('#aclName').value = ''; toast(`${c.name} a maintenant accès à votre carte.`); loadAcl();
   }catch(e){ toast('Ajout refusé : ' + (e.status ? 'vérifiez les règles Firebase.' : e.message), true); }
+});
+
+/* Carte locale : garde les onglets synchronisés entre eux */
+window.addEventListener('storage', e => {
+  if (shared() || demoMode || e.key !== K.map || !e.newValue) return;
+  try{ map = normalize(JSON.parse(e.newValue)); scheduleRender(); }catch(err){}
 });
 
 /* Aide */
