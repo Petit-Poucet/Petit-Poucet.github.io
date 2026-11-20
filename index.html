@@ -65,6 +65,36 @@ svg#vol.panning{cursor:grabbing}
 #vol.focus .ring{opacity:.35}
 #map.focus .node.pair rect.box{stroke:var(--accent);stroke-width:3;filter:drop-shadow(0 0 10px rgba(242,167,75,.75))}
 #vol.focus .vnode.pair .vsel{stroke-width:3;filter:drop-shadow(0 0 8px rgba(242,167,75,.9))}
+/* Chemin depuis le personnage actif vers le système cliqué */
+#map.route .node:not(.onpath),#vol.route .vnode:not(.onpath){opacity:.32}
+#map.route .link:not(.onroute),#map.route .lt:not(.onroute),#vol.route .link:not(.onroute),#vol.route .lt:not(.onroute){opacity:.22}
+#vol.route .stem,#vol.route .shadow{opacity:.3}
+.routeglow{stroke:var(--accent);stroke-linecap:round;opacity:.38;fill:none;pointer-events:none}
+#map .node.onpath rect.box{stroke:var(--accent);stroke-width:2}
+#vol .vnode.onpath .pathring{fill:none;stroke:var(--accent);stroke-width:2}
+.routebox{border-left:3px solid var(--accent);background:var(--bg);padding:8px 10px;font-size:12.5px;border-radius:2px}
+.routebox b{color:var(--accent)}
+/* Kills : aura rouge (récent) et alarme (kills répétés) */
+.killaura{fill:none;stroke:var(--bad);pointer-events:none}
+.killaura.recent{stroke-width:5;opacity:.55}
+.killaura.alarm{stroke-width:10;opacity:.9;filter:drop-shadow(0 0 10px rgba(239,90,90,.95))}
+.node.alarm rect.box{fill:#2a0f14;stroke:var(--bad);stroke-width:2}
+@media (prefers-reduced-motion:no-preference){
+  .killaura.recent{animation:killslow 2.8s ease-in-out infinite}
+  .killaura.alarm{animation:killfast .7s ease-in-out infinite}
+}
+@keyframes killslow{0%,100%{opacity:.08}50%{opacity:.7}}
+@keyframes killfast{0%,100%{opacity:.25;stroke-width:6}50%{opacity:1;stroke-width:13}}
+#killAlarm{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:6;display:grid;gap:6px;max-width:min(560px,calc(100% - 300px))}
+.kbanner{display:flex;align-items:center;gap:10px;background:#3a0d12;border:2px solid var(--bad);color:#ffd9d9;padding:8px 12px;border-radius:4px;font-weight:600;box-shadow:0 0 18px rgba(239,90,90,.55);cursor:pointer;font-family:inherit;font-size:13.5px;text-align:left}
+@media (prefers-reduced-motion:no-preference){.kbanner{animation:kbanner 1.4s ease-in-out infinite}}
+@keyframes kbanner{0%,100%{box-shadow:0 0 6px rgba(239,90,90,.35)}50%{box-shadow:0 0 22px rgba(239,90,90,.9)}}
+.kbanner .x{margin-left:auto;background:none;border:0;color:#ffd9d9;font-size:16px;padding:0 4px}
+.klist{display:grid;gap:3px;font-size:12px}
+.klist a{color:var(--text);text-decoration:none;display:flex;gap:8px}
+.klist a:hover{text-decoration:underline}
+.klist .ago{font-family:var(--mono);color:var(--bad);min-width:62px}
+.legend .ka{display:inline-block;width:22px;height:10px;border:3px solid var(--bad);border-radius:3px}
 .preview{stroke:var(--accent);stroke-width:3;stroke-dasharray:9 7;fill:none;pointer-events:none;opacity:.95}
 @media (prefers-reduced-motion:no-preference){.preview{animation:dash 1s linear infinite}}
 @keyframes dash{to{stroke-dashoffset:-16}}
@@ -93,6 +123,21 @@ svg#vol.panning{cursor:grabbing}
 .link.eol{stroke:var(--eol)}
 .link.sel{filter:drop-shadow(0 0 4px var(--accent))}
 .lt{font-family:var(--mono);font-size:10px;font-weight:600;paint-order:stroke;stroke:var(--bg);stroke-width:3px}
+.mpanel{position:absolute;left:12px;top:12px;width:250px;max-height:calc(100% - 200px);overflow:auto;background:rgba(14,20,36,.92);border:1px solid var(--line);border-radius:4px;z-index:5;backdrop-filter:blur(4px)}
+.mphead{width:100%;display:flex;align-items:center;gap:8px;background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:8px 10px;font-family:var(--display);font-size:1rem;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);text-align:left}
+.mphead .chev{margin-left:auto;transition:transform .2s}
+.mphead[aria-expanded="false"]{border-bottom:0}
+.mphead[aria-expanded="false"] .chev{transform:rotate(-90deg)}
+.mpanel #mpList,.mpanel #mpOff{padding:4px}
+.plink.live{color:var(--ok);text-decoration-color:rgba(95,214,138,.45)}
+.plink.dead{color:var(--bad);text-decoration-color:rgba(239,90,90,.45)}
+.plink.live:disabled,.plink.dead:disabled{text-decoration:none}
+.dot.dead{background:var(--bad)}
+.mpsub{width:100%;display:flex;align-items:center;gap:8px;background:none;border:0;border-top:1px solid var(--line);border-radius:0;padding:7px 10px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--bad);text-align:left}
+.mpsub .chev{margin-left:auto;transition:transform .2s}
+.mpsub[aria-expanded="false"] .chev{transform:rotate(-90deg)}
+.who .live{fill:var(--ok)} .who .dead{fill:var(--bad)}
+.mpanel .prow{padding:4px 6px}
 .legend{position:absolute;left:12px;bottom:12px;background:rgba(14,20,36,.92);border:1px solid var(--line);padding:8px 10px;font-size:11.5px;display:grid;gap:4px;border-radius:3px}
 .legend span{display:flex;align-items:center;gap:8px}
 .legend i{display:inline-block;width:22px;height:0;border-top:3px solid}
@@ -157,7 +202,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Version de la carte">v1.7</span>
+  <span class="ver" id="appVersion" title="Version de la carte">v2.1</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Ajouter un système…" aria-label="Nom du système à ajouter">
     <button type="submit">Ajouter</button>
@@ -186,6 +231,15 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
       <defs id="volDefs"></defs>
       <g id="volScene"></g>
     </svg>
+    <div id="killAlarm" aria-live="assertive"></div>
+    <div class="mpanel" id="mapPilots" hidden>
+      <button type="button" class="mphead" id="mpToggle" aria-expanded="true" aria-controls="mpList">Pilotes <span id="mpCount" class="mono"></span><span class="chev" aria-hidden="true">▾</span></button>
+      <div id="mpList" class="plist"></div>
+      <div id="mpOffWrap" hidden>
+        <button type="button" class="mpsub" id="mpOffToggle" aria-expanded="false" aria-controls="mpOff">Déconnectés <span id="mpOffCount"></span><span class="chev" aria-hidden="true">▾</span></button>
+        <div id="mpOff" class="plist" hidden></div>
+      </div>
+    </div>
     <div class="hint" id="volHint" hidden>Glisser : tourner · Maj + glisser : déplacer · Molette : zoom</div>
     <div class="legend" aria-label="Légende">
       <span><i style="border-color:#8fb0d8"></i>Trou de ver stable</span>
@@ -193,6 +247,8 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
       <span><i style="border-color:var(--bad);border-top-style:dotted"></i>Masse critique</span>
       <span><i style="border-color:var(--eol)"></i>Fin de vie (EOL)</span>
       <span><i style="border-color:#3c4a66;border-top-style:dotted;border-top-width:2px"></i>Porte stellaire</span>
+      <span><b class="ka" style="opacity:.6"></b>Kill récent (moins de 15 min)</span>
+      <span><b class="ka" style="box-shadow:0 0 8px var(--bad)"></b>Alarme : 3 kills ou plus en 10 min</span>
     </div>
     <div class="zoom"><button type="button" id="zin" aria-label="Zoomer">+</button><button type="button" id="zout" aria-label="Dézoomer">−</button></div>
   </div>
@@ -225,11 +281,6 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
       </div>
     </section>
 
-    <section class="card" id="pilotsCard" hidden>
-      <h2>Pilotes sur la carte</h2>
-      <p class="note">Cliquez sur un nom pour centrer la carte sur lui.</p>
-      <div class="plist" id="pilotsList"></div>
-    </section>
 
     <section class="card">
       <h2>Sélection</h2>
@@ -543,7 +594,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '1.7';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '2.1';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -931,6 +982,73 @@ async function loadZkill(id){
 }
 
 /* =========================================================
+   Kills récents : zKillboard (liste de la dernière heure) + ESI (heure exacte et vaisseau)
+   ========================================================= */
+const KILL_RECENT_MIN = 15, ALARM_WINDOW_MIN = 10, ALARM_COUNT = 3;
+const killFeed = {};      // système -> [{ id, time, ship }]
+const kmCache = {};       // killmail -> { time, ship }
+const alarmSeen = {};     // système -> heure du dernier kill déjà signalé
+const alarmHidden = {};   // système -> bandeau fermé jusqu'à ce kill
+let killPolling = false;
+async function pollKills(){
+  if (killPolling || demoMode) return;
+  killPolling = true;
+  try{
+    const ids = Object.keys(map.nodes).filter(id => map.nodes[id] && isRealId(id)).slice(0, 40);
+    for (const id of ids){
+      try{
+        const r = await fetch(`https://zkillboard.com/api/kills/solarSystemID/${id}/pastSeconds/3600/`);
+        if (r.status === 429){ await new Promise(res => setTimeout(res, 5000)); continue; }
+        if (!r.ok) continue;
+        const list = await r.json();
+        const kills = [];
+        for (const k of (Array.isArray(list) ? list : []).slice(0, 30)){
+          if (!k || !k.killmail_id || !k.zkb || !k.zkb.hash) continue;
+          let km = kmCache[k.killmail_id];
+          if (!km){
+            try{
+              const e = await fetch(`${ESI}/killmails/${k.killmail_id}/${k.zkb.hash}/`);
+              if (!e.ok) continue;
+              const j = await e.json();
+              let ship = ''; try{ ship = (await esi(`/universe/types/${j.victim.ship_type_id}/`)).name; }catch(err){}
+              km = kmCache[k.killmail_id] = { time:Date.parse(j.killmail_time), ship };
+            }catch(err){ continue; }
+          }
+          kills.push({ id:k.killmail_id, time:km.time, ship:km.ship });
+        }
+        killFeed[id] = kills.sort((a, b) => b.time - a.time);
+      }catch(e){}
+      await new Promise(res => setTimeout(res, 350));   // reste courtois avec zKillboard
+    }
+  } finally { killPolling = false; }
+  scheduleRender();
+}
+/* État d'un système : 'alarm' (kills répétés), 'recent' (kill de moins de 15 min) ou '' */
+function killState(id){
+  const ks = killFeed[id]; if (!ks || !ks.length) return '';
+  const now = Date.now();
+  const inWin = ks.filter(k => now - k.time < ALARM_WINDOW_MIN * 60000).length;
+  if (inWin >= ALARM_COUNT) return 'alarm';
+  return now - ks[0].time < KILL_RECENT_MIN * 60000 ? 'recent' : '';
+}
+function renderKillAlarms(){
+  const box = $('#killAlarm'); if (!box) return;
+  const now = Date.now(), items = [];
+  for (const id in killFeed){
+    if (!map.nodes[id] || killState(id) !== 'alarm') continue;
+    const ks = killFeed[id], n = ks.filter(k => now - k.time < ALARM_WINDOW_MIN * 60000).length;
+    if (alarmHidden[id] && alarmHidden[id] >= ks[0].time) continue;
+    items.push({ id, n, last:ks[0].time });
+    if (!alarmSeen[id] || alarmSeen[id] < ks[0].time){ alarmSeen[id] = ks[0].time; toast(`⚠ Alarme : ${n} kills en ${ALARM_WINDOW_MIN} min à ${map.nodes[id].name}`, true); }
+  }
+  box.innerHTML = items.map(it => `<div class="kbanner" role="button" tabindex="0" data-k="${esc(it.id)}">⚠ Activité intense à <u>${esc(map.nodes[it.id].name)}</u> : ${it.n} kills en ${ALARM_WINDOW_MIN} min (dernier il y a ${fmtDur((now - it.last) / 60000)})<button type="button" class="x" data-close="${esc(it.id)}" aria-label="Masquer cette alerte">×</button></div>`).join('');
+  box.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', e => {
+    if (e.target.dataset.close){ alarmHidden[e.target.dataset.close] = (killFeed[e.target.dataset.close] || [{}])[0].time || Date.now(); renderKillAlarms(); return; }
+    focusSystem(b.dataset.k);
+  }));
+}
+
+/* =========================================================
    Connexion EVE (SSO avec PKCE, sans secret)
    ========================================================= */
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -1179,6 +1297,11 @@ function startDemo(){
   setSync('', 'Démo');
   pilot.online = true; pilot.ship = 'Astero (démo)';
   map.pilots.demo2 = { name:'Corpmate (démo)', sys:'d1', ship:'Tengu', online:true, t:Date.now() };
+  map.pilots.demo3 = { name:'Éclaireur (démo)', sys:'d4', ship:'Buzzard', online:false, t:Date.now() };
+  // Kills fictifs pour montrer l'aura (Ennur) et l'alarme (J163512)
+  const nowD = Date.now();
+  killFeed.d4 = [{ id:1, time:nowD - 6 * 60000, ship:'Heron' }];
+  killFeed.d3 = [{ id:2, time:nowD - 2 * 60000, ship:'Gila' }, { id:3, time:nowD - 4 * 60000, ship:'Capsule' }, { id:4, time:nowD - 7 * 60000, ship:'Tengu' }];
   let i = 0;
   const step = () => {
     const d = DEMO[i], idx = i;
@@ -1201,6 +1324,7 @@ function startDemo(){
 }
 function stopDemo(){
   clearInterval(demoTimer); demoTimer = null; demoMode = false;
+  ['d3', 'd4'].forEach(k => delete killFeed[k]); $('#killAlarm').innerHTML = '';
   if (savedBeforeDemo){ map = savedBeforeDemo.map; me.current = savedBeforeDemo.current; savedBeforeDemo = null; }
   pilot.online = false; pilot.ship = '';
   $('#btnDemo').textContent = 'Mode démo';
@@ -1248,19 +1372,29 @@ function activePilots(){
   for (const id in map.pilots){
     const p = map.pilots[id]; if (!p) continue;
     if (fb && String(id) === String(fb.uid)) continue;
-    if (now - (p.t || 0) > 15 * 60000 && !demoMode) continue;
-    out.push(Object.assign({ id }, p, { alts:undefined }));
-    if (p.alts) for (const k in p.alts){ const a = p.alts[k]; if (a) out.push({ id:id + '-' + k, name:a.name, sys:a.sys, ship:a.ship, online:!!a.online, t:p.t, altOf:p.name }); }
+    const age = now - (p.t || 0);
+    if (age > 24 * 3600e3 && !demoMode) continue;             // au-delà de 24 h on n'affiche plus
+    const fresh = demoMode || age < 3 * 60000;                // onglet fermé depuis plus de 3 min = déconnecté
+    out.push(Object.assign({ id }, p, { alts:undefined, live:!!p.online && fresh }));
+    if (p.alts) for (const k in p.alts){ const a = p.alts[k]; if (a) out.push({ id:id + '-' + k, name:a.name, sys:a.sys, ship:a.ship, online:!!a.online, live:!!a.online && fresh, t:p.t, altOf:p.name }); }
   }
   return out;
 }
 function mineAt(sysId){
   const names = [];
-  if (me.current != null && String(me.current) === String(sysId)) names.push(tok ? tok.charName : 'Vous');
-  if (canMulti()) for (const a of myAltsInfo()) if (a.sys != null && String(a.sys) === String(sysId)) names.push(a.name);
+  if (me.current != null && String(me.current) === String(sysId)) names.push({ name:tok ? tok.charName : 'Vous', live:!!pilot.online });
+  if (canMulti()) for (const a of myAltsInfo()) if (a.sys != null && String(a.sys) === String(sysId)) names.push({ name:a.name, live:!!a.online });
   return names;
 }
-function renderAll(){ render(); renderLog(); renderPilot(); renderPilots(); renderExits(); }
+/* Écrit des noms de pilotes colorés (vert = en jeu, rouge = déconnecté) dans un <text> SVG */
+function whoSpans(textEl, items, prefix){
+  if (prefix){ const t = document.createElementNS(svgNS, 'tspan'); t.textContent = prefix; textEl.appendChild(t); }
+  items.forEach((it, i) => {
+    if (i){ const sep = document.createElementNS(svgNS, 'tspan'); sep.textContent = ', '; textEl.appendChild(sep); }
+    const t = document.createElementNS(svgNS, 'tspan'); t.setAttribute('class', it.live ? 'live' : 'dead'); t.textContent = it.name; textEl.appendChild(t);
+  });
+}
+function renderAll(){ render(); renderLog(); renderPilot(); renderPilots(); renderExits(); renderKillAlarms(); }
 function render(){
   const vol = cfg.view === 'vol';
   $('#map').toggleAttribute('hidden', vol); $('#vol').toggleAttribute('hidden', !vol); $('#volHint').hidden = !vol;
@@ -1268,14 +1402,16 @@ function render(){
   $('#btnView').setAttribute('aria-pressed', String(vol));
   if (vol){ renderVolume(); renderSel(); return; }
   const gl = $('#links'), gn = $('#nodes'), glab = $('#labels');
+  const route = currentRoute();
   gl.innerHTML = ''; gn.innerHTML = ''; glab.innerHTML = '';
   for (const l of linksArr()){
     const a = map.nodes[l.a], b = map.nodes[l.b];
     if (!a || !b) continue;
     const x1 = a.x + NW/2, y1 = a.y + NH/2, x2 = b.x + NW/2, y2 = b.y + NH/2;
     const isSel = sel && sel.kind === 'link' && sel.id === l.id;
-    const pl = isPairLink(l);
-    const cls = 'link ' + (l.type === 'gate' ? 'gate' : (l.eol ? 'eol ' : '') + l.mass) + (isSel ? ' sel' : '') + (pl ? ' pairlink' : '');
+    const pl = isPairLink(l), onr = !!(route && route.links.includes(l.id));
+    const cls = 'link ' + (l.type === 'gate' ? 'gate' : (l.eol ? 'eol ' : '') + l.mass) + (isSel ? ' sel' : '') + (pl ? ' pairlink' : '') + (onr ? ' onroute' : '');
+    if (onr) el('line', { x1, y1, x2, y2, class:'routeglow', 'stroke-width':12 }, gl);
     el('line', { x1, y1, x2, y2, class:cls }, gl);
     const hit = el('line', { x1, y1, x2, y2, class:'link-hit' }, gl);
     hit.dataset.link = l.id;
@@ -1287,18 +1423,20 @@ function render(){
       const me_ = massEstimate(l); if (me_ && me_.used) l2.push('reste ≈' + fmtMkg((me_.lo + me_.hi) / 2));
       const lines = [l1.join(' · '), l2.join(' · ')].filter(Boolean);
       lines.forEach((txt, i) => {
-        const t = el('text', { x:(x1 + x2) / 2, y:(y1 + y2) / 2 - 8 - (lines.length - 1 - i) * 12, 'text-anchor':'middle', class:'lt' + (pl ? ' pairlink' : ''), fill:l.eol ? 'var(--eol)' : '#a9c1e0' }, glab);
+        const t = el('text', { x:(x1 + x2) / 2, y:(y1 + y2) / 2 - 8 - (lines.length - 1 - i) * 12, 'text-anchor':'middle', class:'lt' + (pl ? ' pairlink' : '') + (onr ? ' onroute' : ''), fill:l.eol ? 'var(--eol)' : '#a9c1e0' }, glab);
         t.textContent = txt;
       });
     }
   }
   const pilotsBySys = {};
-  for (const p of activePilots()){ (pilotsBySys[p.sys] = pilotsBySys[p.sys] || []).push(p.name); }
+  for (const p of activePilots()){ (pilotsBySys[p.sys] = pilotsBySys[p.sys] || []).push({ name:p.name, live:p.live }); }
   for (const id in map.nodes){
     const n = map.nodes[id]; if (!n) continue;
     const c = CLASS[n.cls] || CLASS['?'];
     const mine = mineAt(n.id), here = mine.length > 0;
-    const g = el('g', { class:'node' + (here ? ' here' : '') + (isSelNode(n.id) ? ' sel' : '') + (pairMode() && isSelNode(n.id) ? ' pair' : ''), transform:`translate(${n.x} ${n.y})`, tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, gn);
+    const ksF = killState(n.id);
+    const g = el('g', { class:'node' + (here ? ' here' : '') + (ksF === 'alarm' ? ' alarm' : '') + (isSelNode(n.id) ? ' sel' : '') + (pairMode() && isSelNode(n.id) ? ' pair' : '') + (route && route.ids.includes(String(n.id)) ? ' onpath' : ''), transform:`translate(${n.x} ${n.y})`, tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, gn);
+    if (ksF) el('rect', { x:-9, y:-9, width:NW + 18, height:NH + 18, rx:11, class:'killaura ' + ksF }, g);
     if (here) el('rect', { x:-4, y:-4, width:NW + 8, height:NH + 8, rx:7, class:'halo' }, g);
     el('rect', { width:NW, height:NH, rx:4, class:'box' }, g);
     el('rect', { width:5, height:NH, rx:2, fill:c.color }, g);
@@ -1316,14 +1454,15 @@ function render(){
     if (ws && ws.eff){ const e = el('text', { x:NW - 10, y:54, 'text-anchor':'end', class:'eff' }, g); e.textContent = ws.eff.replace(' Star', '').replace('Cataclysmic Variable', 'Cataclysmic'); }
     else if (k && (k.ship_kills || k.pod_kills)){ const e = el('text', { x:NW - 10, y:54, 'text-anchor':'end', class:'act' }, g); e.textContent = `☠ ${k.ship_kills + k.pod_kills}/h`; }
     let labelY = -10;
-    if (here){ const w = el('text', { x:NW/2, y:labelY, 'text-anchor':'middle', class:'who' }, g); w.textContent = '▼ ' + mine.join(', '); labelY -= 14; }
-    if (pilotsBySys[n.id]){ const w = el('text', { x:NW/2, y:labelY, 'text-anchor':'middle', class:'who other' }, g); w.textContent = pilotsBySys[n.id].join(', '); }
+    if (here){ const w = el('text', { x:NW/2, y:labelY, 'text-anchor':'middle', class:'who' }, g); whoSpans(w, mine, '▼ '); labelY -= 14; }
+    if (pilotsBySys[n.id]){ const w = el('text', { x:NW/2, y:labelY, 'text-anchor':'middle', class:'who' }, g); whoSpans(w, pilotsBySys[n.id]); }
     g.addEventListener('pointerdown', ev => startDrag(ev, n));
     g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); select('node', n.id); } });
   }
   // Deux systèmes sélectionnés : estompe le reste et montre la future connexion
   const pm = pairMode();
   svg.classList.toggle('focus', pm);
+  svg.classList.toggle('route', !!route && !pm);
   if (pm && !linkBetween(sel.id, sel.second)){
     const a = map.nodes[sel.id], b = map.nodes[sel.second];
     el('line', { x1:a.x + NW/2, y1:a.y + NH/2, x2:b.x + NW/2, y2:b.y + NH/2, class:'preview' }, gl);
@@ -1438,6 +1577,8 @@ function renderVolume(){
   // Deux systèmes sélectionnés : estompe le reste
   const pmV = pairMode();
   $('#vol').classList.toggle('focus', pmV);
+  const routeV = currentRoute();
+  $('#vol').classList.toggle('route', !!routeV && !pmV);
   // Liens et systèmes triés du plus loin au plus proche
   const items = [];
   for (const l of linksArr()){
@@ -1447,39 +1588,45 @@ function renderVolume(){
   for (const id of ids) items.push({ kind:'node', id, p:P[id], depth:P[id].depth });
   items.sort((u, v) => u.depth - v.depth);
   const pilotsBySys = {};
-  for (const p of activePilots()) (pilotsBySys[p.sys] = pilotsBySys[p.sys] || []).push(p.name);
+  for (const p of activePilots()) (pilotsBySys[p.sys] = pilotsBySys[p.sys] || []).push({ name:p.name, live:p.live });
   for (const it of items){
     if (it.kind === 'link'){
       const l = it.l, w = Math.max(1.2, 3 * (it.a.s + it.b.s) / 2);
       const isSel = sel && sel.kind === 'link' && sel.id === l.id;
-      const pl = isPairLink(l);
-      const cls = 'link ' + (l.type === 'gate' ? 'gate' : (l.eol ? 'eol ' : '') + l.mass) + (isSel ? ' sel' : '') + (pl ? ' pairlink' : '');
+      const pl = isPairLink(l), onr = !!(routeV && routeV.links.includes(l.id));
+      const cls = 'link ' + (l.type === 'gate' ? 'gate' : (l.eol ? 'eol ' : '') + l.mass) + (isSel ? ' sel' : '') + (pl ? ' pairlink' : '') + (onr ? ' onroute' : '');
+      if (onr) el('line', { x1:it.a.x, y1:it.a.y, x2:it.b.x, y2:it.b.y, class:'routeglow', 'stroke-width':(w * 4).toFixed(1) }, scene);
       el('line', { x1:it.a.x, y1:it.a.y, x2:it.b.x, y2:it.b.y, class:cls, style:`stroke-width:${w.toFixed(2)}px` }, scene);
       const hit = el('line', { x1:it.a.x, y1:it.a.y, x2:it.b.x, y2:it.b.y, class:'link-hit' }, scene); hit.dataset.link = l.id;
       if (l.type !== 'gate' && (l.wh || l.eol)){
         const li = lifeInfo(l);
-        const t = el('text', { x:(it.a.x + it.b.x) / 2, y:(it.a.y + it.b.y) / 2 - 6, 'text-anchor':'middle', class:'lt' + (pl ? ' pairlink' : ''), fill:l.eol ? 'var(--eol)' : '#a9c1e0' }, scene);
+        const t = el('text', { x:(it.a.x + it.b.x) / 2, y:(it.a.y + it.b.y) / 2 - 6, 'text-anchor':'middle', class:'lt' + (pl ? ' pairlink' : '') + (onr ? ' onroute' : ''), fill:l.eol ? 'var(--eol)' : '#a9c1e0' }, scene);
         t.textContent = [l.wh, l.eol && li ? li.label : ''].filter(Boolean).join(' · ');
       }
       continue;
     }
     const n = map.nodes[it.id], p = it.p, c = CLASS[n.cls] || CLASS['?'];
     const rad = Math.max(6, 15 * p.s);
-    const g = el('g', { class:'vnode' + (pairMode() && isSelNode(it.id) ? ' pair' : ''), tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, scene);
+    const onp = !!(routeV && routeV.ids.includes(String(it.id)));
+    const g = el('g', { class:'vnode' + (pairMode() && isSelNode(it.id) ? ' pair' : '') + (onp ? ' onpath' : ''), tabindex:'0', role:'button', 'aria-label':`Système ${n.name}` }, scene);
     g.dataset.node = it.id;
     const mineV = mineAt(it.id);
     if (mineV.length) el('circle', { cx:p.x, cy:p.y, r:rad + 5, class:'halo' }, g);
+    const ksV = killState(it.id);
+    if (ksV) el('circle', { cx:p.x, cy:p.y, r:rad + 10, class:'killaura ' + ksV }, g);
     el('circle', { cx:p.x, cy:p.y, r:rad, fill:`url(#vg-${(n.cls in CLASS ? n.cls : '?').replace('?', 'U')})` }, g);
+    if (onp && !isSelNode(it.id)) el('circle', { cx:p.x, cy:p.y, r:rad + 3, class:'pathring' }, g);
     if (isSelNode(it.id)) el('circle', { cx:p.x, cy:p.y, r:rad + 3, class:'vsel' }, g);
     const fs = Math.max(10, Math.min(20, 14 * p.s));
     const t = el('text', { x:p.x, y:p.y + rad + fs + 2, 'text-anchor':'middle', class:'vname', 'font-size':fs }, g); t.textContent = n.name;
     const ws = whData.systems[n.id];
     const sub = [c.label]; if (ws && ws.st && ws.st.length) sub.push(ws.st.join(' ')); if (ws && ws.eff) sub.push(ws.eff.replace(' Star', ''));
     const t2 = el('text', { x:p.x, y:p.y + rad + fs * 2 + 2, 'text-anchor':'middle', class:'vcls', 'font-size':Math.max(9, fs * 0.62), fill:c.color }, g); t2.textContent = sub.join(' · ');
-    const who = [];
-    if (mineV.length) who.push('▼ ' + mineV.join(', '));
-    if (pilotsBySys[it.id]) who.push(pilotsBySys[it.id].join(', '));
-    if (who.length){ const w = el('text', { x:p.x, y:p.y - rad - 8, 'text-anchor':'middle', class:'who' + (who.length === 1 && !String(me.current).length ? ' other' : ''), 'font-size':11 }, g); w.textContent = who.join(' · '); }
+    if (mineV.length || pilotsBySys[it.id]){
+      const w = el('text', { x:p.x, y:p.y - rad - 8, 'text-anchor':'middle', class:'who', 'font-size':11 }, g);
+      if (mineV.length) whoSpans(w, mineV, '▼ ');
+      if (pilotsBySys[it.id]){ if (mineV.length){ const sp = document.createElementNS(svgNS, 'tspan'); sp.textContent = ' · '; w.appendChild(sp); } whoSpans(w, pilotsBySys[it.id]); }
+    }
     g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); select('node', it.id); } });
   }
   if (pmV && !linkBetween(sel.id, sel.second) && P[String(sel.id)] && P[String(sel.second)]){
@@ -1567,6 +1714,56 @@ function clickSystem(id, multi){
     sel = { kind:'node', id:sel.id, second:id }; linkPick = false; lastSelKey = ''; render(); return;
   }
   select('node', id);
+  fitRoute(currentRoute());
+}
+/* Chemin le plus court sur les connexions de la carte (BFS) */
+function findPath(from, to){
+  if (from == null || to == null || !map.nodes[from] || !map.nodes[to]) return null;
+  from = String(from); to = String(to);
+  if (from === to) return { ids:[from], links:[] };
+  const adj = {};
+  for (const l of linksArr()){ const a = String(l.a), b = String(l.b); if (!map.nodes[a] || !map.nodes[b]) continue; (adj[a] = adj[a] || []).push([b, l.id]); (adj[b] = adj[b] || []).push([a, l.id]); }
+  const prev = { [from]:null }, q = [from];
+  while (q.length){
+    const u = q.shift(); if (u === to) break;
+    for (const [v, lid] of adj[u] || []) if (!(v in prev)){ prev[v] = [u, lid]; q.push(v); }
+  }
+  if (!(to in prev)) return { ids:[], links:[], none:true };
+  const ids = [to], links = [];
+  for (let c = to; prev[c]; c = prev[c][0]){ links.push(prev[c][1]); ids.push(prev[c][0]); }
+  return { ids:ids.reverse(), links:links.reverse() };
+}
+function currentRoute(){
+  if (!sel || sel.kind !== 'node' || sel.second != null) return null;
+  const r = findPath(me.current, sel.id);
+  return r && r.ids.length > 1 ? r : null;
+}
+/* Cadre tout le chemin à l'écran, une seule fois (ensuite on zoome librement) */
+function fitRoute(r){
+  if (!r || r.ids.length < 2) return;
+  if (cfg.view === 'vol'){
+    for (let pass = 0; pass < 3; pass++){
+      renderVolume();
+      const pts = r.ids.map(id => [...document.querySelectorAll('#vol .vnode')].find(x => String(x.dataset.node) === String(id))).filter(Boolean)
+        .map(g => { const c = g.querySelector('circle:not(.halo)'); return [Number(c.getAttribute('cx')), Number(c.getAttribute('cy'))]; });
+      if (!pts.length) return;
+      const box = $('#vol').getBoundingClientRect();
+      const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+      const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+      const f = Math.min((box.width - 220) / Math.max(1, maxX - minX), (box.height - 200) / Math.max(1, maxY - minY));
+      if (pass < 2) vcam.k = Math.min(3, Math.max(0.3, vcam.k * Math.min(f, 2.5)));
+      vcam.px += box.width / 2 - (minX + maxX) / 2; vcam.py += box.height / 2 - (minY + maxY) / 2;
+    }
+    renderVolume();
+  } else {
+    const ns = r.ids.map(id => map.nodes[id]).filter(Boolean);
+    const minX = Math.min(...ns.map(n => n.x)) - 50, maxX = Math.max(...ns.map(n => n.x + NW)) + 50;
+    const minY = Math.min(...ns.map(n => n.y)) - 50, maxY = Math.max(...ns.map(n => n.y + NH)) + 40;
+    const box = svg.getBoundingClientRect();
+    const k = Math.min(1.4, Math.max(0.3, Math.min(box.width / (maxX - minX), box.height / (maxY - minY))));
+    view.k = k; view.x = box.width / 2 - (minX + maxX) / 2 * k; view.y = box.height / 2 - (minY + maxY) / 2 * k;
+    applyView();
+  }
 }
 const pairMode = () => !!(sel && sel.kind === 'node' && sel.second != null && map.nodes[sel.id] && map.nodes[sel.second]);
 const isPairLink = l => pairMode() && ((String(l.a) === String(sel.id) && String(l.b) === String(sel.second)) || (String(l.b) === String(sel.id) && String(l.a) === String(sel.second)));
@@ -1582,6 +1779,15 @@ function renderSel(){
   box.className = '';
   if (sel.kind === 'node' && sel.second != null) renderPairPanel(box); else if (sel.kind === 'node') renderNodePanel(box); else renderLinkPanel(box);
 }
+function routeHtml(n){
+  const who = tok ? tok.charName : (demoMode ? 'vous' : '');
+  if (me.current == null || !map.nodes[me.current] || !who) return '';
+  if (String(me.current) === String(n.id)) return `<div class="routebox"><b>${esc(who)}</b> est dans ce système.</div>`;
+  const r = findPath(me.current, n.id);
+  if (!r || r.none) return `<div class="routebox">Aucun chemin connu sur la carte depuis <b>${esc(map.nodes[me.current].name)}</b>.</div>`;
+  const jumps = r.ids.length - 1;
+  return `<div class="routebox">Depuis <b>${esc(who)}</b> : <b>${jumps} saut${jumps > 1 ? 's' : ''}</b><br>${r.ids.map(id => esc(map.nodes[id].name)).join(' → ')}</div>`;
+}
 function renderNodePanel(box){
   const n = map.nodes[sel.id]; if (!n){ sel = null; renderSel(); return; }
   const c = CLASS[n.cls] || CLASS['?'];
@@ -1596,6 +1802,7 @@ function renderNodePanel(box){
   }
   box.innerHTML = `
     <div class="row"><span class="big">${esc(n.name)}</span><span class="badge" style="background:${c.color}">${esc(c.label)}</span></div>
+    ${routeHtml(n)}
     <dl class="kv">
       <dt>Région</dt><dd>${esc(n.region)}</dd>
       ${isJ(n.cls) ? '' : `<dt>Sécurité</dt><dd class="mono">${(Math.round(n.sec * 10) / 10).toFixed(1)}</dd>`}
@@ -1604,6 +1811,9 @@ function renderNodePanel(box){
       <dt>Activité</dt><dd>${k ? `${k.ship_kills} vaisseau(x), ${k.pod_kills} capsule(s), ${k.npc_kills} PNJ tués` : 'Aucun kill'} <span class="dim">(dernière heure)</span>${j != null ? `<br>${fmtInt(j)} saut(s) dans la dernière heure` : ''}
         ${isRealId(n.id) ? `<br>zKillboard 24 h : ${z && z.n != null ? `<b>${z.n}${z.n >= 200 ? '+' : ''}</b> kill(s)` : '<span class="dim">–</span>'} · <a href="https://zkillboard.com/system/${n.id}/" target="_blank" rel="noopener">voir</a>` : ''}</dd>
     </dl>
+    ${(() => { const ks = (killFeed[n.id] || []); if (!ks.length) return ''; const st = killState(n.id); const now = Date.now();
+      return `<div class="${st === 'alarm' ? 'kbanner' : 'routebox'}" style="${st === 'alarm' ? 'cursor:default;animation:none' : 'border-left-color:var(--bad)'}">${st === 'alarm' ? '⚠ Alarme : kills répétés' : 'Kills de la dernière heure'}</div>
+      <div class="klist">${ks.slice(0, 8).map(k => `<a href="https://zkillboard.com/kill/${k.id}/" target="_blank" rel="noopener"><span class="ago">il y a ${fmtDur((now - k.time) / 60000)}</span><span>${esc(k.ship || 'vaisseau inconnu')}</span></a>`).join('')}</div>`; })()}
     <label class="f">Notes partagées (habitants, structures, dangers…)<textarea id="nNotes">${esc(n.notes)}</textarea></label>
     <h3>Signatures</h3>
     <label class="f">Dans le scanner du jeu : Ctrl+A, Ctrl+C, puis collez ici
@@ -1822,7 +2032,7 @@ function renderPilot(){
     ph.innerHTML = '';
     $('#btnLogin').textContent = 'Connexion EVE'; $('#btnLogin').classList.add('primary');
   }
-  $('#pStatus').innerHTML = `<span class="dot ${pilot.online ? 'on' : ''}"></span>${pilot.online ? 'En ligne' : 'Hors ligne'}`;
+  $('#pStatus').innerHTML = tok || demoMode ? `<span class="dot ${pilot.online ? 'on' : 'dead'}"></span><span style="color:var(${pilot.online ? '--ok' : '--bad'})">${pilot.online ? 'En jeu' : 'Déconnecté'}</span>` : '<span class="dot"></span>Non connecté';
   const cur = map.nodes[me.current];
   $('#pSys').innerHTML = cur ? `<b>${esc(cur.name)}</b> <span class="dim">${esc((CLASS[cur.cls] || CLASS['?']).label)}</span>` : '–';
   $('#pShip').textContent = pilot.ship || '–';
@@ -1849,7 +2059,7 @@ function renderPilot(){
     : 'Le propriétaire de cette carte ne vous a pas autorisé à suivre plusieurs personnages.';
   const list = myAltsInfo();
   $('#altsList').innerHTML = list.length ? list.map(a => { const n = map.nodes[a.sys]; return `<div class="prow${allowed && a.online ? '' : ' off'}">
-      <span class="dot ${allowed && a.online ? 'on' : ''}"></span><b>${esc(a.name)}</b>
+      <span class="dot ${allowed && a.online ? 'on' : 'dead'}"></span><b>${esc(a.name)}</b>
       <button type="button" class="small" data-rmalt="${a.charId}" title="Ne plus suivre ce personnage">Retirer</button>
       <span class="ship">${allowed ? (n ? esc(n.name) : 'position inconnue') + (a.shipFull ? ' · ' + esc(a.shipFull) : '') : 'suivi désactivé sur cette carte'}</span></div>`; }).join('')
     : '<span class="empty">Aucun pour l\'instant.</span>';
@@ -1860,24 +2070,30 @@ function renderPilot(){
   }));
 }
 function renderPilots(){
-  // Vous en premier, puis les autres pilotes : connectés d'abord, puis par nom
+  // Vos personnages en premier, puis les autres pilotes par nom ; en jeu (vert) en haut, déconnectés (rouge) dans la rubrique repliable
   const list = [];
-  if (tok || demoMode) list.push({ id:'me', name:(tok ? tok.charName : 'Pilote de démo') + ' (vous)', sys:me.current, ship:pilot.shipType || pilot.ship, online:pilot.online, self:true });
-  if (tok && canMulti()) for (const a of myAltsInfo()) list.push({ id:'alt' + a.charId, name:a.name + ' (vous)', sys:a.sys, ship:a.ship, online:a.online, self:true });
-  activePilots().sort((a, b) => (b.online - a.online) || String(a.name).localeCompare(String(b.name))).forEach(p => list.push(p));
+  if (tok || demoMode) list.push({ id:'me', name:(tok ? tok.charName : 'Pilote de démo') + ' (vous)', sys:me.current, ship:pilot.shipType || pilot.ship, live:!!pilot.online, self:true });
+  if (tok && canMulti()) for (const a of myAltsInfo()) list.push({ id:'alt' + a.charId, name:a.name + ' (vous)', sys:a.sys, ship:a.ship, live:!!a.online, self:true });
+  activePilots().sort((a, b) => String(a.name).localeCompare(String(b.name))).forEach(p => list.push(p));
   const others = list.filter(p => !p.self).length;
-  $('#pilotsCard').hidden = !(shared() || demoMode || others);
-  if (!list.length){ $('#pilotsList').innerHTML = '<span class="empty">Personne pour l\'instant.</span>'; return; }
-  $('#pilotsList').innerHTML = list.map(p => {
+  const on = list.filter(p => p.live), off = list.filter(p => !p.live);
+  $('#mapPilots').hidden = !(shared() || demoMode || others);
+  $('#mpCount').textContent = list.length ? `(${on.length}/${list.length})` : '';
+  const row = (p, full) => {
     const n = p.sys != null ? map.nodes[p.sys] : null;
-    return `<div class="prow${p.online ? '' : ' off'}">
-      <span class="dot ${p.online ? 'on' : ''}" title="${p.online ? 'En jeu' : 'Hors ligne'}"></span>
-      <button type="button" class="plink" data-sys="${n ? esc(p.sys) : ''}" ${n ? '' : 'disabled'} title="${n ? 'Centrer la carte sur ' + esc(n.name) : 'Pas sur la carte'}">${esc(p.name)}</button>
+    return `<div class="prow">
+      <span class="dot ${p.live ? 'on' : 'dead'}" title="${p.live ? 'En jeu' : 'Déconnecté'}"></span>
+      <button type="button" class="plink ${p.live ? 'live' : 'dead'}" data-sys="${n ? esc(p.sys) : ''}" ${n ? '' : 'disabled'} title="${n ? 'Centrer la carte sur ' + esc(n.name) : 'Pas sur la carte'}">${esc(p.name)}</button>
       <span class="where">${n ? esc(n.name) : 'hors carte'}</span>
-      ${p.ship ? `<span class="ship">${esc(p.ship)}</span>` : ''}
+      ${full && p.ship ? `<span class="ship">${esc(p.ship)}</span>` : ''}
     </div>`;
-  }).join('') + (shared() && !others ? '<span class="empty" style="padding:4px 6px">Aucun autre pilote sur la carte.</span>' : '');
-  $('#pilotsList').querySelectorAll('.plink[data-sys]:not([disabled])').forEach(b => b.addEventListener('click', () => focusSystem(b.dataset.sys)));
+  };
+  $('#mpList').innerHTML = on.length ? on.map(p => row(p, true)).join('') : '<span class="empty" style="padding:4px 6px">Aucun pilote en jeu.</span>';
+  $('#mpOffWrap').hidden = !off.length;
+  $('#mpOffCount').textContent = `(${off.length})`;
+  $('#mpOff').innerHTML = off.map(p => row(p, false)).join('');
+  for (const box of [$('#mpList'), $('#mpOff')])
+    box.querySelectorAll('.plink[data-sys]:not([disabled])').forEach(b => b.addEventListener('click', () => focusSystem(b.dataset.sys)));
 }
 /* Centre la carte sur un système (vue à plat ou en volume) et le sélectionne */
 function focusSystem(id){
@@ -1970,6 +2186,16 @@ $('#fileImport').addEventListener('change', async e => {
 });
 $('#btnLogin').addEventListener('click', () => tok ? logout() : login());
 $('#btnAddAlt').addEventListener('click', () => login(true));
+(function(){
+  const t = $('#mpToggle'), list = $('#mpList');
+  const apply = open => { t.setAttribute('aria-expanded', String(open)); list.hidden = !open; $('#mpOffWrap').style.display = open ? '' : 'none'; };
+  apply(store.get('whmap.mpOpen', true));
+  t.addEventListener('click', () => { const open = t.getAttribute('aria-expanded') !== 'true'; apply(open); store.set('whmap.mpOpen', open); });
+  const t2 = $('#mpOffToggle'), off = $('#mpOff');
+  const apply2 = open => { t2.setAttribute('aria-expanded', String(open)); off.hidden = !open; };
+  apply2(store.get('whmap.mpOffOpen', false));
+  t2.addEventListener('click', () => { const open = t2.getAttribute('aria-expanded') !== 'true'; apply2(open); store.set('whmap.mpOffOpen', open); });
+})();
 $('#charSel').addEventListener('change', async e => {
   const v = e.target.value;
   if (v === 'new'){ login(); return; }
@@ -2127,7 +2353,8 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeSetup(
   await connectShared();
   renderAll(); center();
   loadWhData(); loadActivity();
-  setInterval(() => { loadActivity(); if (!drag) render(); renderPilots(); }, 30000);
+  setInterval(() => { loadActivity(); if (!drag) render(); renderPilots(); renderKillAlarms(); }, 30000);
+  setTimeout(pollKills, 4000); setInterval(pollKills, 2 * 60000);
   if (location.protocol === 'file:') toast('Le mode démo fonctionne partout. Pour la connexion EVE, ouvrez la carte depuis son adresse en ligne (voir Aide).', true);
   if (tok && cfg.clientId) startTracking();
   else if (!cfg.clientId && location.protocol !== 'file:') openSetup();
