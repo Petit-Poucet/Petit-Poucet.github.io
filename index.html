@@ -249,7 +249,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v5.0</span>
+  <span class="ver" id="appVersion" title="Map version">v5.1</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -362,7 +362,8 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
       <h2>Jump log</h2>
       <div id="log"><span class="empty">No jumps yet.</span></div>
     </section>
-  </aside>
+    <p class="note" style="padding:10px 16px 16px;margin:0">© 2026 cloporte · Le Petit Poucet Galactique · All rights reserved.<br>EVE Online © CCP hf. Not affiliated with CCP.</p>
+</aside>
 </div>
 
 <!-- Réglages -->
@@ -381,7 +382,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
     <label class="f">Access server URL (Cloudflare Worker)<input id="cWorker" class="mono" spellcheck="false" placeholder="https://petit-poucet.YOUR-NAME.workers.dev"></label>
     <label class="f">Firebase database URL (Realtime Database)<input id="cDb" class="mono" spellcheck="false" placeholder="https://my-project-default-rtdb.europe-west1.firebasedatabase.app"></label>
     <label class="f">Firebase Web API key<input id="cKey" class="mono" spellcheck="false" placeholder="AIza…"></label>
-    <p class="note">These three values are not secret: protection comes from CCP identity checks and the database rules. Setup: Help button, "Secure sharing" tab.</p>
+    <p class="note">These three values are not secret: protection comes from CCP identity checks and the database rules. Ask the map owner for the setup link.</p>
     <h3>3. Home and hubs</h3>
     <label class="f">Your k-space "home" system (optional)<input id="homeName" placeholder="e.g. Hek"></label>
     <div class="row"><button type="button" class="primary" id="saveSetup">Save</button><button type="button" id="closeSetup">Close</button></div>
@@ -417,12 +418,9 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <!-- Aide / installation -->
 <div class="modal" id="help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
   <div class="mbox">
-    <h2 id="helpTitle">Help and setup</h2>
+    <h2 id="helpTitle">Help</h2>
     <div class="tabs" role="tablist">
       <button type="button" role="tab" data-tab="h-use" aria-selected="true">Using the map</button>
-      <button type="button" role="tab" data-tab="h-gh" aria-selected="false">Publish online</button>
-      <button type="button" role="tab" data-tab="h-fb" aria-selected="false">Secure sharing</button>
-      <button type="button" role="tab" data-tab="h-eve" aria-selected="false">EVE application</button>
     </div>
     <div id="h-use" class="tabpane">
       <ol>
@@ -431,227 +429,20 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
         <li>In the in-game scanner, press Ctrl+A then Ctrl+C, and paste into the system's <b>Signatures</b> box.</li>
         <li>Click a <b>connection</b> to set the hole type (e.g. H296), mass, end of life, and use the mass calculator.</li>
         <li>Log each pass ("Add a pass") to track remaining mass, shared with the whole corp.</li>
-        <li>Drag systems with the mouse, use the wheel to zoom, drag the background to pan.</li>
+        <li>Drag systems with the mouse, use the wheel to zoom, drag the background to pan. <b>3D view</b> rotates around the selected system.</li>
+        <li><b>ENTER</b> / <b>EXIT</b>: one click marks your current system as the way in / the way home, a second click removes it.</li>
+        <li><b>Thera</b> and <b>Turnur</b> (EVE-Scout data) stay hidden until your chain connects to them: show them with the 🌀 button, and see jumps and routes in the right panel.</li>
+        <li><b>📦 Assets</b> shows where your characters have assets; after each wormhole jump, a window lists the ones within your chosen range.</li>
+        <li><b>Set destination</b> (system panel) sends the route straight to your EVE client.</li>
       </ol>
-    </div>
-    <div id="h-gh" class="tabpane" hidden>
-      <p class="note">GitHub Pages hosts the map for free, at an https address. Your PC does not need to stay on.</p>
-      <ol>
-        <li>Create a free account on <a href="https://github.com/" target="_blank" rel="noopener">github.com</a>.</li>
-        <li>Click <b>+</b> at the top right, then <b>New repository</b>. Name: <code>carte-wh</code>. Tick <b>Public</b>, then <b>Create repository</b>.</li>
-        <li>Click <b>uploading an existing file</b>, drop the file <code>carte-wh.html</code> <b>renamed to</b> <code>index.html</code>, then <b>Commit changes</b>.</li>
-        <li>Go to <b>Settings</b>, then <b>Pages</b>. Under <i>Branch</i>, pick <code>main</code> and <code>/ (root)</code>, then <b>Save</b>.</li>
-        <li>After a minute, your map is online at <code>https://YOUR-NAME.github.io/carte-wh/</code>.</li>
-        <li>Use this address as the <b>Callback URL</b> in your EVE application ("EVE application" tab).</li>
-      </ol>
-      <p class="note">The repository is public: only put this file in it. It contains no password, and your database address is never written in it.</p>
-    </div>
-    <div id="h-fb" class="tabpane" hidden>
-      <p class="note">Two free services: <b>Firebase</b> (Google) stores the maps, <b>Cloudflare</b> checks player identity with CCP. No credit card needed. Allow 20 to 30 minutes, once.</p>
-      <h3>A. Firebase</h3>
-      <ol>
-        <li>On <a href="https://console.firebase.google.com/" target="_blank" rel="noopener">console.firebase.google.com</a>, create a project (e.g. <code>petit-poucet</code>). Google Analytics: not needed.</li>
-        <li>Menu <b>Build</b> → <b>Authentication</b> → <b>Get started</b>. Do not enable any provider: it is not needed.</li>
-        <li>Menu <b>Build</b> → <b>Realtime Database</b> → <b>Create database</b>. Location: <b>Belgium (europe-west1)</b>, <b>locked</b> mode.</li>
-        <li><b>Rules</b> tab: replace everything with the rules below, then <b>Publish</b>.</li>
-      </ol>
-<pre id="rulesText">{
-  "rules": {
-    ".read": false,
-    ".write": false,
-    "maps": {
-      "$owner": {
-        "ownerName": {
-          ".read": "auth != null &amp;&amp; ($owner === auth.uid || root.child('maps').child($owner).child('acl').child(auth.uid).exists())",
-          ".write": "auth != null &amp;&amp; $owner === auth.uid"
-        },
-        "acl": {
-          ".read": "auth != null &amp;&amp; ($owner === auth.uid || data.child(auth.uid).exists())",
-          ".write": "auth != null &amp;&amp; $owner === auth.uid"
-        },
-        "data": {
-          ".read": "auth != null &amp;&amp; ($owner === auth.uid || root.child('maps').child($owner).child('acl').child(auth.uid).exists())",
-          ".write": "auth != null &amp;&amp; ($owner === auth.uid || root.child('maps').child($owner).child('acl').child(auth.uid).child('role').val() === 'edit')"
-        },
-        "pilots": {
-          ".read": "auth != null &amp;&amp; ($owner === auth.uid || root.child('maps').child($owner).child('acl').child(auth.uid).exists())",
-          "$uid": {
-            ".write": "auth != null &amp;&amp; ($owner === auth.uid || ($uid === auth.uid &amp;&amp; root.child('maps').child($owner).child('acl').child(auth.uid).exists()))",
-            "alts": {
-              ".validate": "$owner === auth.uid || root.child('maps').child($owner).child('acl').child(auth.uid).child('multi').val() === true"
-            }
-          }
-        }
-      }
-    },
-    "access": {
-      "$uid": {
-        ".read": "auth != null &amp;&amp; $uid === auth.uid",
-        "$owner": {
-          ".write": "auth != null &amp;&amp; $owner === auth.uid"
-        }
-      }
-    }
-  }
-}</pre>
-      <div class="row"><button type="button" class="small" id="btnCopyRules">Copy rules</button></div>
-      <ol start="5">
-        <li><b>Data</b> tab: copy the address at the top (it ends with <code>firebasedatabase.app</code>).</li>
-        <li>Gear icon → <b>Project settings</b> → <b>General</b> tab: copy the <b>Web API key</b> (starts with <code>AIza</code>).</li>
-        <li>Same page, <b>Service accounts</b> tab → <b>Generate new private key</b>. A .json file downloads: <b>keep it secret</b>, never put it on GitHub.</li>
-      </ol>
-      <h3>B. Cloudflare</h3>
-      <ol>
-        <li>Create a free account on <a href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener">dash.cloudflare.com</a>.</li>
-        <li>Menu <b>Compute (Workers)</b> → <b>Workers &amp; Pages</b> → <b>Create</b> → <b>Start with Hello World</b>. Name: <code>petit-poucet</code> → <b>Deploy</b>.</li>
-        <li><b>Edit code</b>: delete everything, paste the server code (button below), then <b>Deploy</b>.</li>
-        <li>In the Worker: <b>Settings</b> → <b>Variables and Secrets</b> → <b>Add</b>, four times:
-          <br><code>ALLOWED_ORIGIN</code> = your map address without the trailing / (e.g. <code>https://petit-poucet.github.io</code>)
-          <br><code>EVE_CLIENT_ID</code> = your EVE Client ID
-          <br><code>FIREBASE_CLIENT_EMAIL</code> = the <code>client_email</code> value from the .json file (type <b>Secret</b>)
-          <br><code>FIREBASE_PRIVATE_KEY</code> = the <code>private_key</code> value from the .json file, from <code>-----BEGIN</code> to <code>END PRIVATE KEY-----</code> included (type <b>Secret</b>)</li>
-        <li>Copy the Worker address (e.g. <code>https://petit-poucet.your-name.workers.dev</code>). Opening it must show <code>"configured":true</code>.</li>
-      </ol>
-      <div class="row"><button type="button" class="small" id="btnCopyWorker">Copy server code</button></div>
-      <h3>C. In the map</h3>
-      <ol>
-        <li><b>Settings</b>: paste the Worker address, the Firebase address and the Web API key, then <b>Save</b>.</li>
-        <li>Log in with EVE again if needed: the indicator at the top switches to "Shared · live". Your local map is uploaded automatically.</li>
-        <li><b>Access</b> button: type a player's in-game name, pick their right, <b>Allow</b>. Send them the setup link.</li>
-      </ol>
-    </div>
-    <div id="h-eve" class="tabpane" hidden>
-      <ol>
-        <li>On <a href="https://developers.eveonline.com/" target="_blank" rel="noopener">developers.eveonline.com</a>, open your application (or create one: <b>Authentication &amp; API Access</b>).</li>
-        <li>Scopes: tick the <code>esi-location</code> group (location, online, ship) plus <code>esi-ui.write_waypoint.v1</code> (Set destination), <code>esi-assets.read_assets.v1</code> and <code>esi-universe.read_structures.v1</code> (assets on the map).</li>
-        <li><b>Callback URL</b>: the exact address shown in Settings. Online, it is your GitHub Pages address, e.g. <code>https://YOUR-NAME.github.io/carte-wh/</code>.</li>
-        <li>Copy the <b>Client ID</b> into Settings. It is included in the setup link: your players have nothing to create.</li>
-      </ol>
+      <p class="note">© 2026 cloporte · Le Petit Poucet Galactique · All rights reserved, copying or redistribution not allowed.<br>EVE Online and all related names and images are the property of CCP hf. This tool is not affiliated with or endorsed by CCP.</p>
     </div>
     <div class="row"><button type="button" id="closeHelp">Close</button></div>
   </div>
 </div>
 
 <div id="toast" role="status" aria-live="polite"></div>
-<script type="text/plain" id="workerCode">/**
- * Le Petit Poucet Galactique : serveur d'accès (Cloudflare Worker)
- *
- * Rôle : vérifier auprès de CCP qu'un joueur est bien le personnage EVE qu'il prétend être,
- * puis lui délivrer un jeton Firebase à son nom (uid = "eve-<ID du personnage>").
- * Les règles de la base Firebase décident ensuite qui peut lire ou modifier chaque carte.
- *
- * Variables à déclarer dans Cloudflare (Settings > Variables and Secrets) :
- *   ALLOWED_ORIGIN         ex. https://petit-poucet.github.io   (plusieurs : séparées par des virgules)
- *   EVE_CLIENT_ID          Client ID de votre application EVE
- *   FIREBASE_CLIENT_EMAIL  "client_email" du fichier de clé du compte de service Firebase   (type Secret)
- *   FIREBASE_PRIVATE_KEY   "private_key" du même fichier, copié tel quel                     (type Secret)
- */
 
-const EVE_JWKS = 'https://login.eveonline.com/oauth/jwks';
-const EVE_ISSUERS = ['login.eveonline.com', 'https://login.eveonline.com'];
-const FIREBASE_AUD = 'https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit';
-
-let jwksCache = { keys: null, t: 0 };
-
-export default {
-  async fetch(request, env) {
-    const origin = request.headers.get('Origin') || '';
-    const allowed = String(env.ALLOWED_ORIGIN || '').split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean);
-    const okOrigin = allowed.includes(origin);
-    const cors = {
-      'Access-Control-Allow-Origin': okOrigin ? origin : (allowed[0] || 'null'),
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Max-Age': '86400',
-      'Vary': 'Origin'
-    };
-    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-
-    const url = new URL(request.url);
-    if (url.pathname === '/' && request.method === 'GET') {
-      return json({ ok: true, service: 'Petit Poucet Galactique', configured: !!(env.EVE_CLIENT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY && allowed.length) }, 200, cors);
-    }
-    if (url.pathname !== '/token' || request.method !== 'POST') return json({ error: 'Adresse inconnue' }, 404, cors);
-    if (!okOrigin) return json({ error: 'Site not allowed: check ALLOWED_ORIGIN' }, 403, cors);
-    if (!env.EVE_CLIENT_ID || !env.FIREBASE_CLIENT_EMAIL || !env.FIREBASE_PRIVATE_KEY) return json({ error: 'Serveur incomplet : variables manquantes' }, 500, cors);
-
-    const eveToken = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
-    if (!eveToken) return json({ error: 'Jeton EVE manquant' }, 401, cors);
-
-    let claims;
-    try { claims = await verifyEveToken(eveToken, env.EVE_CLIENT_ID); }
-    catch (e) { return json({ error: 'EVE token refused: ' + e.message }, 401, cors); }
-
-    const charId = Number(String(claims.sub).split(':').pop());
-    const uid = 'eve-' + charId;
-    try {
-      const token = await firebaseCustomToken(uid, { name: claims.name, charId }, env);
-      return json({ token, uid, name: claims.name, charId }, 200, cors);
-    } catch (e) {
-      return json({ error: 'Firebase signing failed: check FIREBASE_PRIVATE_KEY (' + e.message + ')' }, 500, cors);
-    }
-  }
-};
-
-/* ---------- Vérification du jeton EVE (signé par CCP) ---------- */
-async function verifyEveToken(token, clientId) {
-  const parts = token.split('.');
-  if (parts.length !== 3) throw new Error('format');
-  const header = JSON.parse(utf8(b64urlDecode(parts[0])));
-  const claims = JSON.parse(utf8(b64urlDecode(parts[1])));
-  if (header.alg !== 'RS256') throw new Error('algorithme');
-
-  const keys = await getJwks();
-  const jwk = keys.find(k => k.kid === header.kid && k.kty === 'RSA');
-  if (!jwk) throw new Error('unknown signing key');
-  const key = await crypto.subtle.importKey('jwk', { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RS256', ext: true },
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-  const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64urlDecode(parts[2]),
-    new TextEncoder().encode(parts[0] + '.' + parts[1]));
-  if (!valid) throw new Error('signature invalide');
-
-  const now = Math.floor(Date.now() / 1000);
-  if (!claims.exp || claims.exp < now - 30) throw new Error('expired');
-  if (!EVE_ISSUERS.includes(claims.iss)) throw new Error('issuer');
-  const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (!aud.includes(clientId)) throw new Error('different application');
-  if (!/^CHARACTER:EVE:\d+$/.test(String(claims.sub))) throw new Error('personnage');
-  return claims;
-}
-async function getJwks() {
-  if (jwksCache.keys && Date.now() - jwksCache.t < 3600e3) return jwksCache.keys;
-  const r = await fetch(EVE_JWKS, { cf: { cacheTtl: 3600 } });
-  if (!r.ok) throw new Error('CCP keys unavailable');
-  const j = await r.json();
-  jwksCache = { keys: j.keys || [], t: Date.now() };
-  return jwksCache.keys;
-}
-
-/* ---------- Jeton Firebase « custom token » signé avec le compte de service ---------- */
-async function firebaseCustomToken(uid, extraClaims, env) {
-  const pem = String(env.FIREBASE_PRIVATE_KEY).replace(/\\n/g, '\n').replace(/^"|"$/g, '');
-  const der = b64Decode(pem.replace(/-----(BEGIN|END) PRIVATE KEY-----/g, '').replace(/\s+/g, ''));
-  const key = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const payload = {
-    iss: env.FIREBASE_CLIENT_EMAIL, sub: env.FIREBASE_CLIENT_EMAIL, aud: FIREBASE_AUD,
-    iat: now, exp: now + 3600, uid, claims: extraClaims
-  };
-  const input = b64urlEncode(new TextEncoder().encode(JSON.stringify(header))) + '.' + b64urlEncode(new TextEncoder().encode(JSON.stringify(payload)));
-  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(input));
-  return input + '.' + b64urlEncode(new Uint8Array(sig));
-}
-
-/* ---------- Outils ---------- */
-function json(obj, status, headers) {
-  return new Response(JSON.stringify(obj), { status, headers: Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, headers) });
-}
-function b64Decode(s) { const bin = atob(s); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
-function b64urlDecode(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return b64Decode(s); }
-function b64urlEncode(bytes) { let bin = ''; for (const b of bytes) bin += String.fromCharCode(b); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
-function utf8(bytes) { return new TextDecoder().decode(bytes); }
-</script>
 
 <script>
 (() => {
@@ -659,7 +450,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '5.0';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '5.1';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -3047,8 +2838,8 @@ $('#saveSetup').addEventListener('click', async () => {
   }
   if (changed) connectShared();
 });
-$('#btnCopyRules').addEventListener('click', () => copyText($('#rulesText').textContent, 'Rules copied'));
-$('#btnCopyWorker').addEventListener('click', () => copyText($('#workerCode').textContent, 'Server code copied'));
+if ($('#btnCopyRules')) $('#btnCopyRules').addEventListener('click', () => copyText($('#rulesText').textContent, 'Rules copied'));
+if ($('#btnCopyWorker')) $('#btnCopyWorker').addEventListener('click', () => copyText($('#workerCode').textContent, 'Server code copied'));
 async function copyText(t, msg){ try{ await navigator.clipboard.writeText(t); toast(msg); }catch(e){ toast('Copy failed: select the text and press Ctrl+C.', true); } }
 function handleConfigLink(){
   const m = /#config=([A-Za-z0-9_-]+)/.exec(location.hash);
