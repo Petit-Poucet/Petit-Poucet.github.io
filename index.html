@@ -85,6 +85,13 @@ svg#vol.panning{cursor:grabbing}
 }
 @keyframes killslow{0%,100%{opacity:.08}50%{opacity:.7}}
 @keyframes killfast{0%,100%{opacity:.25;stroke-width:6}50%{opacity:1;stroke-width:13}}
+#assetAlert{position:absolute;right:12px;top:12px;z-index:7;width:min(380px,calc(100% - 24px));background:var(--panel);border:1px solid #c9a227;border-radius:6px;box-shadow:0 0 0 1px #000,0 6px 30px rgba(245,197,66,.18);padding:10px 12px;font-size:12.5px}
+#assetAlert h4{margin:0 0 6px;color:#f5c542;font-size:13px;display:flex;align-items:center;gap:8px}
+#assetAlert h4 .x{margin-left:auto}
+#assetAlert table{width:100%;border-collapse:collapse}
+#assetAlert td{padding:4px 4px;border-top:1px solid var(--line);vertical-align:top}
+#assetAlert .rng{display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--dim)}
+#assetAlert .rng input{width:56px}
 #killAlarm{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:6;display:grid;gap:6px;max-width:min(560px,calc(100% - 300px))}
 .kbanner{display:flex;align-items:center;gap:10px;background:#3a0d12;border:2px solid var(--bad);color:#ffd9d9;padding:8px 12px;border-radius:4px;font-weight:600;box-shadow:0 0 18px rgba(239,90,90,.55);cursor:pointer;font-family:inherit;font-size:13.5px;text-align:left}
 @media (prefers-reduced-motion:no-preference){.kbanner{animation:kbanner 1.4s ease-in-out infinite}}
@@ -177,6 +184,11 @@ svg#vol.panning{cursor:grabbing}
 .legend span{display:flex;align-items:center;gap:8px}
 .legend i{display:inline-block;width:22px;height:0;border-top:3px solid}
 .zoom{position:absolute;right:12px;bottom:12px;display:flex;gap:4px}
+.maptools{position:absolute;right:86px;flex-wrap:wrap;justify-content:flex-end;bottom:12px;display:flex;gap:4px}
+.maptools button[aria-pressed="true"]{border-color:#c9a227;color:#f5c542;background:#2e240b}
+.assetbadge rect{fill:#2e240b;stroke:#c9a227;stroke-width:1}
+.assetbadge text{font-family:var(--mono);font-size:10.5px;font-weight:700;fill:#f5c542}
+.vasset{font-family:var(--mono);font-weight:700;fill:#f5c542;paint-order:stroke;stroke:#05080f;stroke-width:3px;pointer-events:none}
 aside{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;min-height:0}
 .card{padding:14px;border-bottom:1px solid var(--line);display:grid;gap:10px}
 .card h2{font-family:var(--display);font-size:1.15rem;letter-spacing:.06em;text-transform:uppercase;margin:0;color:var(--dim);font-weight:500}
@@ -237,7 +249,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v3.3</span>
+  <span class="ver" id="appVersion" title="Map version">v3.7</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -277,6 +289,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
       <g id="volScene"></g>
     </svg>
     <div id="killAlarm" aria-live="assertive"></div>
+    <div id="assetAlert" aria-live="polite" hidden></div>
     <div class="mpanel" id="mapPilots" hidden>
       <button type="button" class="mphead" id="mpToggle" aria-expanded="true" aria-controls="mpList">Pilots <span id="mpCount" class="mono"></span><span class="chev" aria-hidden="true">▾</span></button>
       <div id="mpList" class="plist"></div>
@@ -295,6 +308,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
       <span><b class="ka" style="opacity:.6"></b>Recent kill (under 15 min)</span>
       <span><b class="ka" style="box-shadow:0 0 8px var(--bad)"></b>Alarm: 3+ kills in 10 min</span>
     </div>
+    <div class="maptools"><button type="button" id="btnHubs" aria-pressed="false" title="Show or hide Thera, Turnur and their exits (always shown once connected to your chain)">🌀 Thera / Turnur</button><button type="button" id="btnAssets" aria-pressed="false" title="Show or hide the systems where your characters have assets">📦 Assets</button></div>
     <div class="zoom"><button type="button" id="zin" aria-label="Zoom in">+</button><button type="button" id="zout" aria-label="Zoom out">−</button></div>
   </div>
 
@@ -514,7 +528,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
     <div id="h-eve" class="tabpane" hidden>
       <ol>
         <li>On <a href="https://developers.eveonline.com/" target="_blank" rel="noopener">developers.eveonline.com</a>, open your application (or create one: <b>Authentication &amp; API Access</b>).</li>
-        <li>Scopes: tick the <code>esi-location</code> group (location, online, ship) and <code>esi-ui.write_waypoint.v1</code> (Set destination).</li>
+        <li>Scopes: tick the <code>esi-location</code> group (location, online, ship) plus <code>esi-ui.write_waypoint.v1</code> (Set destination), <code>esi-assets.read_assets.v1</code> and <code>esi-universe.read_structures.v1</code> (assets on the map).</li>
         <li><b>Callback URL</b>: the exact address shown in Settings. Online, it is your GitHub Pages address, e.g. <code>https://YOUR-NAME.github.io/carte-wh/</code>.</li>
         <li>Copy the <b>Client ID</b> into Settings. It is included in the setup link: your players have nothing to create.</li>
       </ol>
@@ -650,13 +664,15 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '3.3';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '3.7';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
 const SSO = 'https://login.eveonline.com/v2/oauth';
 const SCOPES = 'esi-location.read_location.v1 esi-location.read_online.v1 esi-location.read_ship_type.v1';
-const WP_SCOPE = 'esi-ui.write_waypoint.v1';   // asked only once the player uses "Set destination"
+const WP_SCOPE = 'esi-ui.write_waypoint.v1';
+const AS_SCOPE = 'esi-assets.read_assets.v1', ST_SCOPE = 'esi-universe.read_structures.v1';
+const OPT_SCOPES = [WP_SCOPE, AS_SCOPE, ST_SCOPE];   // optional: login falls back without them if the EVE app lacks them
 const DATA_URL = 'https://raw.githubusercontent.com/wanderer-industries/wanderer/main/priv/repo/data/';
 const K = { cfg:'whmap.cfg', tok:'whmap.tok', map:'whmap.map', pkce:'whmap.pkce', me:'whmap.me', data:'whmap.data2', fb:'whmap.fb', alts:'whmap.alts' };
 const NW = 156, NH = 62;
@@ -1173,8 +1189,10 @@ function placeHub(hubId){
     const minX = xs.length ? Math.min(...xs) : 0, maxX = xs.length ? Math.max(...xs) : 0;
     const midY = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0;
     const left = Number(hubId) === HUB.thera.id;
-    const tx = left ? minX - r - 1600 - NW : maxX + r + 1600;
-    if (h.place === 'far' && h.side === (left ? 'L' : 'R') && (left ? h.x <= tx + 400 : h.x >= tx - 400)) return false;
+    // very far, and the bigger the chain, the further away (a big chain never catches up with them)
+    const gap = Math.max(5000, (maxX - minX) * 0.8 + 3500, (ys.length ? Math.max(...ys) - Math.min(...ys) : 0) * 0.8 + 3500);
+    const tx = left ? minX - r - gap - NW : maxX + r + gap;
+    if (h.place === 'far' && h.side === (left ? 'L' : 'R') && (left ? h.x <= tx + 400 : h.x >= tx - 400) && Math.abs(h.y - midY) < gap) return false;
     x = Math.round(tx); y = Math.round(midY);
     h.side = left ? 'L' : 'R';
     place = 'far';
@@ -1494,12 +1512,101 @@ async function login(asAlt, askWp){
   const failedWp = lastWp && Date.now() - lastWp < 30 * 60e3;
   const withWp = askWp || !failedWp;
   if (withWp){ try{ localStorage.setItem('whmap.loginWp', String(Date.now())); }catch(e){} }
-  else toast('Logging in without "Set destination": enable esi-ui.write_waypoint.v1 in your EVE app to use it.', true);
-  const p = new URLSearchParams({ response_type:'code', redirect_uri:callbackUrl, client_id:cfg.clientId, scope:SCOPES + (withWp ? ' ' + WP_SCOPE : ''), code_challenge:challenge, code_challenge_method:'S256', state });
+  else toast('Logging in without the optional permissions (Set destination, assets): enable them in your EVE app on developers.eveonline.com.', true);
+  const p = new URLSearchParams({ response_type:'code', redirect_uri:callbackUrl, client_id:cfg.clientId, scope:SCOPES + (withWp ? ' ' + OPT_SCOPES.join(' ') : ''), code_challenge:challenge, code_challenge_method:'S256', state });
   location.href = `${SSO}/authorize/?${p}`;
 }
 /* ---------- Set destination in game (ESI autopilot waypoint) ---------- */
 const hasScope = (t, sc) => { const c = jwt((t && t.access_token) || '').scp; return Array.isArray(c) ? c.includes(sc) : c === sc; };
+/* ---------- Assets of your characters (this browser only, never shared) ---------- */
+let assetsOn = cfg.showAssets === true;
+const assetData = {};   // charId -> { name, t, bySys:{ sys: count }, err }
+const assetChars = () => (tok ? [{ id:tok.charId, name:tok.charName, t:tok, ensure:ensureToken, get tk(){ return tok; } }] : [])
+  .concat(canMulti() ? alts.map(a => ({ id:a.charId, name:a.charName, ensure:() => ensureAltToken(a), get tk(){ return a; } })) : []);
+async function esiPages(tkObj, path){
+  const out = []; let page = 1, pages = 1;
+  do {
+    const r = await fetch(`${ESI}${path}${path.includes('?') ? '&' : '?'}page=${page}`, { headers:{ Authorization:'Bearer ' + tkObj.access_token }, cache:'no-store' });
+    if (!r.ok) throw Object.assign(new Error('ESI ' + r.status), { status:r.status });
+    pages = Number(r.headers.get('X-Pages') || 1); out.push(...await r.json()); page++;
+  } while (page <= pages && page <= 50);
+  return out;
+}
+const stationSys = store.get('whmap.stations', {}), structSys = store.get('whmap.structs', {});
+async function placeSystem(locId, type, tkObj){
+  if (type === 'solar_system') return locId;
+  if (type === 'station' || (locId >= 60000000 && locId < 64000000)){
+    if (stationSys[locId] == null){ try{ stationSys[locId] = (await esi(`/universe/stations/${locId}/`)).system_id; store.set('whmap.stations', stationSys); }catch(e){ return null; } }
+    return stationSys[locId];
+  }
+  if (locId >= 1e12){   // player structure (citadel…)
+    if (structSys[locId] === undefined){
+      if (!hasScope(tkObj, ST_SCOPE)) return null;
+      try{ const r = await fetch(`${ESI}/universe/structures/${locId}/`, { headers:{ Authorization:'Bearer ' + tkObj.access_token } }); structSys[locId] = r.ok ? (await r.json()).solar_system_id : 0; }catch(e){ structSys[locId] = 0; }
+      store.set('whmap.structs', structSys);
+    }
+    return structSys[locId] || null;
+  }
+  return null;
+}
+async function loadAssets(force){
+  if (demoMode) return;
+  for (const c of assetChars()){
+    const cached = assetData[c.id] || store.get('whmap.assets.' + c.id, null);
+    if (cached) assetData[c.id] = cached;
+    if (!force && cached && Date.now() - cached.t < 60 * 60e3) continue;   // CCP refreshes assets once an hour
+    try{
+      await c.ensure();
+      const tk = c.tk;
+      if (!hasScope(tk, AS_SCOPE)){ assetData[c.id] = { name:c.name, t:Date.now(), bySys:{}, err:'scope' }; continue; }
+      const list = await esiPages(tk, `/characters/${c.id}/assets/`);
+      const byItem = {}; for (const a of list) byItem[a.item_id] = a;
+      const bySys = {}, rootCache = {};
+      for (const a of list){
+        let x = a, guard = 0;
+        while (x.location_type === 'item' && byItem[x.location_id] && guard++ < 10) x = byItem[x.location_id];
+        if (x !== a) continue;   // count only top-level items (ships, containers, hangar stacks)
+        const key = x.location_type + ':' + x.location_id;
+        if (!(key in rootCache)) rootCache[key] = await placeSystem(x.location_id, x.location_type, tk);
+        const sys = rootCache[key]; if (sys) bySys[sys] = (bySys[sys] || 0) + 1;
+      }
+      assetData[c.id] = { name:c.name, t:Date.now(), bySys };
+      store.set('whmap.assets.' + c.id, assetData[c.id]);
+    }catch(e){ assetData[c.id] = { ...(assetData[c.id] || { bySys:{} }), name:c.name, err:String(e.message || e) }; }
+  }
+  if (assetsOn) scheduleRender();
+}
+function assetsAt(sys){
+  if (!assetsOn) return [];
+  const ids = new Set(assetChars().map(c => String(c.id)));
+  return Object.entries(assetData).filter(([id, d]) => ids.has(id) && d && d.bySys && d.bySys[sys]).map(([id, d]) => ({ name:d.name, n:d.bySys[sys] }));
+}
+/* Thera / Turnur and their exits are hidden while not connected to your chain, unless the player shows them */
+function hubHidden(){
+  const out = new Set();
+  if (cfg.showHubs) return out;
+  for (const h of HUB_IDS){
+    if (!map.nodes[h]) continue;
+    const st = hubState(h); if (st.inChain) continue;
+    st.comp.forEach(id => { const n = map.nodes[id]; if (n && (n.scout || isHubId(id)) && String(id) !== String(me.current)) out.add(String(id)); });
+  }
+  return out;
+}
+function showHubs(on){
+  cfg.showHubs = on; saveCfg(); const b = $('#btnHubs'); if (b) b.setAttribute('aria-pressed', String(!!on)); scheduleRender();
+}
+function renderAssetsBtn(){ const b = $('#btnAssets'); if (b) b.setAttribute('aria-pressed', String(assetsOn)); }
+async function toggleAssets(){
+  assetsOn = !assetsOn; cfg.showAssets = assetsOn; saveCfg(); renderAssetsBtn(); scheduleRender(); lastSelKey = '';
+  if (!assetsOn) return;
+  if (!tok){ toast('Log in with EVE to see your assets.', true); return; }
+  toast('Loading your assets…');
+  await loadAssets(false);
+  const missing = assetChars().filter(c => assetData[c.id] && assetData[c.id].err === 'scope').map(c => c.name);
+  const total = Object.values(assetData).reduce((s, d) => s + Object.keys((d && d.bySys) || {}).length, 0);
+  if (missing.length) toast(`No permission to read assets for ${missing.join(', ')}: tick esi-assets.read_assets.v1 and esi-universe.read_structures.v1 in your EVE app, then Log out and log in again.`, true);
+  else toast(`Assets found in ${total} system${total > 1 ? 's' : ''}. Only systems on the map show a 📦 badge.`);
+}
 function wpHelp(){
   toast('"Set destination" is not allowed by your EVE app yet. On developers.eveonline.com, open your app, tick esi-ui.write_waypoint.v1, save, then log out and log in again with EVE.', true);
 }
@@ -1727,6 +1834,41 @@ async function arriveAt(id, info){
   const prev = me.current;
   await moveChar(prev, id, info, tok ? tok.charName : (demoMode ? 'Demo' : ''));
   me.current = id; saveMe();
+  // Went through a wormhole: look for your assets within range
+  const l = prev != null ? linkBetween(prev, id) : null;
+  if (l && l.type !== 'gate' && tok && !demoMode) assetCheck(id);
+}
+/* ---------- "Assets within range" window, after each wormhole jump ---------- */
+let assetCheckN = 0;
+async function assetCheck(sysId, keepOpen){
+  const run = ++assetCheckN, range = Math.max(0, Number(cfg.assetRange ?? 5));
+  await loadAssets(false);
+  const all = {};
+  for (const c of assetChars()){ const d = assetData[c.id]; if (!d || !d.bySys) continue; for (const sys in d.bySys) (all[sys] = all[sys] || []).push({ name:d.name, n:d.bySys[sys] }); }
+  const systems = Object.keys(all);
+  if (!systems.length){ if (keepOpen) showAssetAlert(sysId, range, [], 'none'); return; }
+  const res = await pool(systems.map(sys => async () => {
+    if (String(sys) === String(sysId)) return { sys, cost:0, legs:[] };
+    const r = await reachK(Number(sys)).catch(() => null);
+    return r ? { sys, cost:r.cost, legs:r.legs } : null;
+  }));
+  if (run !== assetCheckN) return;   // a newer jump already started another check
+  const near = res.filter(x => x && x.cost <= range).sort((a, b) => a.cost - b.cost).slice(0, 12);
+  for (const x of near){ x.who = all[x.sys]; try{ x.info = map.nodes[x.sys] || await systemInfo(x.sys); }catch(e){ x.info = { name:String(x.sys), cls:'?' }; } }
+  if (near.length || keepOpen) showAssetAlert(sysId, range, near);
+}
+function showAssetAlert(sysId, range, near, why){
+  const box = $('#assetAlert'), here = nm(sysId);
+  box.hidden = false;
+  box.innerHTML = `<h4>📦 Assets within ${range} jump${range > 1 ? 's' : ''} of ${esc(here)}<button type="button" class="small x" id="aaClose" aria-label="Close">×</button></h4>
+    ${near.length ? `<table>${near.map(x => { const c = CLASS[x.info.cls] || CLASS['?'], items = x.who.reduce((s, w) => s + w.n, 0);
+      return `<tr><td><b>${esc(x.info.name)}</b> <span style="color:${c.color}">${esc(c.label)}</span><br><span class="dim">${x.who.map(w => esc(w.name)).join(', ')} · ${items} item${items > 1 ? 's' : ''}</span></td>
+        <td class="mono r" style="white-space:nowrap"><b>${x.cost}</b> jump${x.cost > 1 ? 's' : ''}${isK(x.info.cls) ? `<br><button type="button" class="small" data-aadest="${esc(x.sys)}">Set destination</button>` : ''}</td></tr>`; }).join('')}</table>`
+      : `<p class="dim" style="margin:0">${why === 'none' ? 'No assets loaded: check the 📦 Assets permissions.' : 'None of your assets within this range.'}</p>`}
+    <label class="rng">Range <input type="number" id="aaRange" min="0" max="50" value="${range}"> jumps <span class="dim">(set by you, kept for next time)</span></label>`;
+  $('#aaClose').addEventListener('click', () => { box.hidden = true; });
+  $('#aaRange').addEventListener('change', e => { cfg.assetRange = Math.max(0, Math.min(50, Number(e.target.value) || 0)); saveCfg(); assetCheck(sysId, true); });
+  box.querySelectorAll('[data-aadest]').forEach(b => b.addEventListener('click', () => setDestination(Number(b.dataset.aadest), false)));
 }
 /* Ajoute le système, la connexion depuis le système précédent et une ligne de journal (si le droit de modifier le permet) */
 async function moveChar(prev, id, info, who){
@@ -1916,9 +2058,10 @@ function render(){
   const pairSeen = {}, pairCount = {};
   for (const l of linksArr()){ const k = [String(l.a), String(l.b)].sort().join('|'); pairCount[k] = (pairCount[k] || 0) + 1; }
   const focusIds = new Set(sel && sel.kind === 'node' ? [sel.id, sel.second].filter(x => x != null && !HUB_IDS.includes(Number(x))).map(String) : []);
+  const hidden = hubHidden();
   for (const l of linksArr()){
     const a = map.nodes[l.a], b = map.nodes[l.b];
-    if (!a || !b) continue;
+    if (!a || !b || hidden.has(String(l.a)) || hidden.has(String(l.b))) continue;
     const pk = [String(l.a), String(l.b)].sort().join('|');
     if (pairSeen[pk] && !(sel && sel.kind === 'link' && sel.id === l.id)) continue;   // same two systems: draw once
     pairSeen[pk] = true;
@@ -1950,7 +2093,7 @@ function render(){
   const pilotsBySys = {};
   for (const p of activePilots()){ if (p.live) (pilotsBySys[p.sys] = pilotsBySys[p.sys] || []).push({ name:p.name, live:true }); }
   for (const id in map.nodes){
-    const n = map.nodes[id]; if (!n) continue;
+    const n = map.nodes[id]; if (!n || hidden.has(String(id))) continue;
     const c = CLASS[n.cls] || CLASS['?'];
     const mine = mineAt(n.id), here = mine.length > 0;
     const ksF = killState(n.id);
@@ -1961,6 +2104,9 @@ function render(){
     el('rect', { width:5, height:NH, rx:2, fill:c.color }, g);
     const nm = el('text', { x:14, y:22, class:'nm' }, g); nm.textContent = n.name;
     const cl = el('text', { x:NW - 10, y:19, 'text-anchor':'end', class:'cls', fill:c.color }, g); cl.textContent = c.label;
+    { const as = assetsAt(n.id); if (as.length){ const tot = as.reduce((s, a) => s + a.n, 0); const lbl = '📦 ' + tot; const w = 14 + lbl.length * 6.6;
+        const ag = el('g', { class:'assetbadge', transform:`translate(${NW - w + 6} -11)` }, g); const tt0 = el('title', {}, ag); tt0.textContent = 'Your assets here: ' + as.map(a => `${a.name} (${a.n})`).join(', ');
+        el('rect', { width:w, height:17, rx:8 }, ag); const at = el('text', { x:w / 2, y:12.5, 'text-anchor':'middle' }, ag); at.textContent = lbl; } }
     { let tx = NW - 4; for (const kind of ['exit', 'enter']) if (isMark(kind, n.id)){ const w = kind === 'enter' ? 54 : 46; tx -= w + 14; const tp = el('g', { transform:`translate(${tx} ${NH - 6})` }, g); const tg = el('g', { class:'exittag mkpulse ' + kind }, tp); el('rect', { width:w, height:18, rx:4 }, tg); const tt = el('text', { x:w / 2, y:13, 'text-anchor':'middle' }, tg); tt.textContent = MARKS[kind].label; } }
     const ws = whData.systems[n.id];
     const sub = el('text', { x:14, y:39, class:'sub' }, g);
@@ -2001,7 +2147,8 @@ let vcam = { yaw:-0.5, pitch:0.95, k:1, px:0, py:0 };
 const VR = 170, VH = 80, VF = 1600;
 let vfit = 1;
 function volLayout(){
-  const ids = Object.keys(map.nodes).filter(id => map.nodes[id]);
+  const hiddenV = hubHidden();
+  const ids = Object.keys(map.nodes).filter(id => map.nodes[id] && !hiddenV.has(String(id)));
   const adj = {}; ids.forEach(id => adj[id] = []);
   for (const l of linksArr()){ const a = String(l.a), b = String(l.b); if (adj[a] && adj[b]){ adj[a].push(b); adj[b].push(a); } }
   const seen = new Set(), comps = [];
@@ -2047,9 +2194,11 @@ function volLayout(){
   });
   comps.sort((a, b) => a.side - b.side);
   let offset = 0; const all = {};
+  comps.forEach(c => { c.rad = Math.max(1, c.maxD) * VR; });
+  const mainSpan = comps.filter(c => c.side === 1).reduce((s, c) => s + 2 * c.rad, 0);
+  const hubGap = Math.max(VR * 22, mainSpan * 0.8 + VR * 12);   // far, and further for a big chain
   comps.forEach((c, i) => {
-    c.rad = Math.max(1, c.maxD) * VR;
-    if (i > 0) offset += comps[i - 1].rad + c.rad + VR * (c.side !== comps[i - 1].side ? 6 : 0.6);
+    if (i > 0) offset += comps[i - 1].rad + c.rad + (c.side !== comps[i - 1].side ? hubGap : VR * 0.6);
     c.cx = offset;
     for (const id in c.pos){ const p = c.pos[id]; all[id] = { x:p.x + offset, y:p.y, z:p.z, d:p.d }; }
   });
@@ -2166,6 +2315,7 @@ function renderVolume(){
     if (onp && !isSelNode(it.id)) el('circle', { cx:p.x, cy:p.y, r:rad + 3, class:'pathring' }, g);
     if (isSelNode(it.id)) el('circle', { cx:p.x, cy:p.y, r:rad + 3, class:'vsel' }, g);
     const fs = Math.max(10, Math.min(20, 14 * p.s));
+    { const as = assetsAt(it.id); if (as.length){ const at = el('text', { x:p.x + rad + 4, y:p.y - rad * 0.3, class:'vasset', 'font-size':Math.max(10, fs * 0.75) }, g); at.textContent = '📦 ' + as.reduce((s, a) => s + a.n, 0); } }
     const t = el('text', { x:p.x, y:p.y + rad + fs + 2, 'text-anchor':'middle', class:'vname', 'font-size':fs }, g); t.textContent = n.name;
     const ws = whData.systems[n.id];
     const sub = [c.label]; if (ws && ws.st && ws.st.length) sub.push(ws.st.join(' ')); if (ws && ws.eff) sub.push(ws.eff.replace(' Star', ''));
@@ -2374,6 +2524,7 @@ function renderNodePanel(box){
       <button type="button" class="small" id="nSigClear">Clear all</button>
     </div>
     ${sigRows ? `<table><thead><tr><th>ID</th><th>Group</th><th>Type</th><th class="r">%</th></tr></thead><tbody>${sigRows}</tbody></table>` : '<span class="empty">No signatures saved.</span>'}
+    ${(() => { const as = assetsAt(n.id); return as.length ? `<h3>Your assets here</h3><div class="row" style="gap:6px">${as.map(a => `<span class="chip">📦 ${esc(a.name)} · ${a.n} item${a.n > 1 ? 's' : ''}</span>`).join('')}</div>` : ''; })()}
     <h3>Autopilot (in game)</h3>
     <div class="row">${isJ(n.cls) || !isRealId(n.id)
       ? '<span class="note">Wormhole systems cannot be an in-game destination (the autopilot only follows stargates).</span>'
@@ -2661,6 +2812,7 @@ function renderPilots(){
 /* Centre la carte sur un système (vue à plat ou en volume) et le sélectionne */
 function focusSystem(id){
   const n = map.nodes[id]; if (!n) return;
+  if (!cfg.showHubs && hubHidden().has(String(id))) showHubs(true);
   sel = { kind:'node', id:n.id }; lastSelKey = '';
   if (cfg.view === 'vol'){
     renderVolume();
@@ -2716,6 +2868,12 @@ $('#addForm').addEventListener('submit', async ev => {
 });
 $('#btnDemo').addEventListener('click', startDemo);
 $('#btnThera').addEventListener('click', () => gotoHub('thera'));
+$('#btnAssets').addEventListener('click', toggleAssets);
+$('#btnHubs').addEventListener('click', () => showHubs(!cfg.showHubs));
+$('#btnHubs').setAttribute('aria-pressed', String(!!cfg.showHubs));
+renderAssetsBtn();
+setInterval(() => { if (assetsOn && tok) loadAssets(false); }, 10 * 60e3);
+setTimeout(() => { if (assetsOn && tok) loadAssets(false); }, 4000);
 $('#btnHere').addEventListener('click', () => { if (me.current != null && map.nodes[me.current]) focusSystem(me.current); else toast('Your character\'s location is unknown: log in with EVE.', true); });
 $('#btnHome').addEventListener('click', () => { if (!cfg.home){ openSetup(); $('#homeName').focus(); toast('Enter your home system, then Save.'); return; } gotoSystem(cfg.home.id, cfg.home.name); });
 $('#btnExit').addEventListener('click', () => clickMark('exit'));
