@@ -249,7 +249,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v4.8</span>
+  <span class="ver" id="appVersion" title="Map version">v4.9</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -659,7 +659,7 @@ function utf8(bytes) { return new TextDecoder().decode(bytes); }
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '4.8';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '4.9';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -1023,25 +1023,28 @@ let gateSaveT = null;
 let routeFails = 0;
 async function routeJumps(origin, dest, pref){
   if (String(origin) === String(dest)) return 0;
-  const safe = pref === 'safe';
-  const key = (safe ? 's:' : '') + origin + '>' + dest;
+  const safe = pref === 'safe', nohub = pref === 'nohub';
+  if (nohub && (String(origin) === String(HUB.turnur.id) || String(dest) === String(HUB.turnur.id))) return null;
+  const tag = safe ? 's:' : nohub ? 'n:' : '';
+  const key = tag + origin + '>' + dest;
   if (key in gateStore) return gateStore[key];
   if (routeCache.has(key)) return routeCache.get(key);
   let ids = null;
   for (let attempt = 0; attempt < 3 && !ids; attempt++){
   if (attempt) await new Promise(res => setTimeout(res, 800 * attempt));   // CCP may refuse bursts of requests: wait and retry
   try{
-    const r = await fetch(`${ESI_ROOT}/route/${origin}/${dest}`, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Compatibility-Date':'2025-09-30' }, body:JSON.stringify({ preference:safe ? 'Safer' : 'Shorter' }) });
+    const r = await fetch(`${ESI_ROOT}/route/${origin}/${dest}`, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Compatibility-Date':'2025-09-30' }, body:JSON.stringify(nohub ? { preference:'Shorter', avoid_systems:[HUB.turnur.id] } : { preference:safe ? 'Safer' : 'Shorter' }) });
     if (r.ok){ const j = await r.json(); ids = Array.isArray(j) ? j : (j.route || j.systems || null); }
   }catch(e){}
   if (!ids){
-    try{ const r = await fetch(`${ESI}/route/${origin}/${dest}/?flag=${safe ? 'secure' : 'shortest'}`); if (r.ok) ids = await r.json(); }catch(e){}
+    try{ const r = await fetch(`${ESI}/route/${origin}/${dest}/?flag=${safe ? 'secure' : 'shortest'}${nohub ? '&avoid=' + HUB.turnur.id : ''}`); if (r.ok) ids = await r.json(); }catch(e){}
   }
   }
+  if (nohub && Array.isArray(ids) && ids.map(Number).includes(HUB.turnur.id)) ids = null;   // CCP ignored the avoid list: not a valid answer
   const n = Array.isArray(ids) ? Math.max(0, ids.length - 1) : null;
   if (n == null){ routeFails++; return null; }   // a failure is never remembered: next calculation asks again
   routeCache.set(key, n);
-  if (n != null){ gateStore[key] = n; gateStore[(safe ? 's:' : '') + dest + '>' + origin] = n; clearTimeout(gateSaveT); gateSaveT = setTimeout(() => store.set('whmap.gates', gateStore), 1000); }
+  if (n != null){ gateStore[key] = n; gateStore[tag + dest + '>' + origin] = n; clearTimeout(gateSaveT); gateSaveT = setTimeout(() => store.set('whmap.gates', gateStore), 1000); }
   return n;
 }
 /* Lance des calculs en parallèle (6 à la fois) pour ne pas saturer ESI */
@@ -1296,7 +1299,7 @@ async function reachK(target, avoid, pref){
   let best = null;
   const origins = routeOrigins(avoid);
   const res = await pool(origins.map(o => async () => ({ o, g:await routeJumps(o.sys, target, pref) })));
-  for (const { o, g } of res) if (g != null && (!best || o.hops + g < best.cost)) best = { cost:o.hops + g, legs:[mapLeg(o), g ? `${pref === 'safe' ? 'Safest gates' : 'Gates'}: ${nm(o.sys)} → ${nm(target)} (${g} jump${g > 1 ? 's' : ''})` : null].filter(Boolean) };
+  for (const { o, g } of res) if (g != null && (!best || o.hops + g < best.cost)) best = { cost:o.hops + g, legs:[mapLeg(o), g ? `${pref === 'safe' ? 'Safest gates' : pref === 'nohub' ? 'Gates, avoiding Turnur' : 'Gates'}: ${nm(o.sys)} → ${nm(target)} (${g} jump${g > 1 ? 's' : ''})` : null].filter(Boolean) };
   return best;
 }
 // Meilleur moyen d'entrer dans un hub (Thera ou Turnur)
@@ -1350,12 +1353,12 @@ function renderHubCard(){
     const dests = HUB_TRADE();
     box.innerHTML = `<p class="note">Routes from ${origin ? `<b>${esc(origin)}</b> (your current system, updated after each jump)` : 'your location'}: by stargates, through Thera, through Turnur, or chaining both. A wormhole jump counts as 1.</p>
       <div class="row"><button type="button" class="small" id="hubCalcRoutes"${hubBusy || !origin ? ' disabled' : ''}>${hubBusy ? 'Calculating…' : 'Recalculate'}</button>${origin ? '' : '<span class="note">Log in a character that is on the map.</span>'}</div>
-      ${hubRoutes ? `<table class="htable"><thead><tr><th>Hub</th><th>Shortest</th><th class="r">Jumps</th><th>Safest</th><th class="r">Jumps</th></tr></thead><tbody>${dests.map(d => {
-        const r = hubRoutes[d.id] || {}, a = r.short, b = r.safe;
+      ${hubRoutes ? `<table class="htable"><thead><tr><th>Hub</th><th>Shortest</th><th class="r">J</th><th>Safest</th><th class="r">J</th><th class="r" title="Shortest route that never goes through Thera or Turnur">No hub</th></tr></thead><tbody>${dests.map(d => {
+        const r = hubRoutes[d.id] || {}, a = r.short, b = r.safe, c = r.nohub;
         const open = hubOpen === 'h' + d.id;
         const cells = x => x ? `<td>${esc(x.how)}</td><td class="r mono best">${x.cost}</td>` : '<td class="dim">No route</td><td class="r dim">–</td>';
-        return `<tr class="clk${open ? ' open' : ''}" data-hopen="h${d.id}"><td><b>${esc(d.name)}</b></td>${cells(a)}${cells(b)}</tr>${open ? `<tr><td colspan="5">${a ? `<div class="legs"><b>Shortest: ${a.cost} jumps (${esc(a.how)})</b>${a.legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>` : ''}${b ? `<div class="legs"><b>Safest: ${b.cost} jumps (${esc(b.how)})</b>${b.legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>` : ''}</td></tr>` : ''}`;
-      }).join('')}</tbody></table><p class="note">Shortest = fewest jumps. Safest = stargate legs stay in high-sec as much as CCP's "safer" routing allows (wormhole jumps still count). Click a row for both detailed paths.</p>` : ''}`;
+        return `<tr class="clk${open ? ' open' : ''}" data-hopen="h${d.id}"><td><b>${esc(d.name)}</b></td>${cells(a)}${cells(b)}${c ? `<td class="r mono">${c.cost}</td>` : '<td class="r dim">–</td>'}</tr>${open ? `<tr><td colspan="6">${a ? `<div class="legs"><b>Shortest: ${a.cost} jumps (${esc(a.how)})</b>${a.legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>` : ''}${b ? `<div class="legs"><b>Safest: ${b.cost} jumps (${esc(b.how)})</b>${b.legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>` : ''}${c ? `<div class="legs"><b>Without Thera or Turnur: ${c.cost} jumps</b>${c.legs.map(l => `<span>${esc(l)}</span>`).join('')}</div>` : '<div class="legs"><b>Without Thera or Turnur: no route found</b></div>'}</td></tr>` : ''}`;
+      }).join('')}</tbody></table><p class="note">Shortest = fewest jumps. No hub = fewest jumps without ever going through Thera or Turnur. Safest = stargate legs stay in high-sec as much as CCP's "safer" routing allows (wormhole jumps still count). Click a row for both detailed paths.</p>` : ''}`;
   } else {
     const hub = HUB[hubTab], jv = c => { const j = hubCalc[c.sid]; return j ? j.cost : j === null ? 1e6 : 1e7; };
     const conns = hubConns(hub.id).sort((a, b) => (jv(a) - jv(b)) || String(a.name).localeCompare(String(b.name)));   // closest first
@@ -1437,6 +1440,9 @@ async function calcHubRoutes(manual){
         (res[d.id] = res[d.id] || {})[pref] = bestOf({ direct, thera:join(toThera, lt), turnur:join(toTurnur, lu), both });
       }
     }
+    // never through Thera or Turnur: stargates (avoiding the Turnur system) and your own chain only
+    const avoidHubs = new Set(HUB_IDS.map(String));
+    for (const d of HUB_TRADE()){ const x = await reachK(d.id, avoidHubs, 'nohub'); res[d.id].nohub = x ? { ...x, how:'By stargates' } : null; }
     hubRoutes = res;
   }catch(e){ if (manual) toast('Calculation failed: ' + e.message, true); }
   hubRoutesFor = stamp; hubBusy = false; renderHubCard();
