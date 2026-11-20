@@ -151,6 +151,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
   <input id="fileImport" type="file" accept=".json,application/json" hidden>
   <button id="btnClear" type="button" class="danger">Vider la carte</button>
   <button id="btnHelp" type="button">Aide</button>
+  <button id="btnAccess" type="button" hidden>Accès</button>
   <button id="btnSetup" type="button">Réglages</button>
   <button id="btnLogin" type="button" class="primary">Connexion EVE</button>
 </header>
@@ -225,24 +226,41 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
     <label class="f">Rafraîchissement de la position
       <select id="pollSel"><option value="5">Toutes les 5 secondes</option><option value="10">Toutes les 10 secondes</option><option value="20">Toutes les 20 secondes</option></select>
     </label>
-    <h3>2. Carte partagée avec la corpo</h3>
+    <h3>2. Partage sécurisé (facultatif)</h3>
     <p class="note" id="shareState">Carte locale : elle n'est visible que dans ce navigateur.</p>
-    <label class="f">Adresse de votre base Firebase (Realtime Database)
-      <input id="dbUrl" class="mono" spellcheck="false" placeholder="https://mon-projet-default-rtdb.europe-west1.firebasedatabase.app">
-    </label>
-    <div class="row">
-      <button type="button" id="btnCreateShare">Créer une carte partagée</button>
-      <button type="button" id="btnLeaveShare" class="danger" hidden>Quitter la carte partagée</button>
-    </div>
-    <div id="shareLinkBox" class="box" hidden>
-      <span class="note">Lien d'invitation à envoyer à vos corpmates. Toute personne qui a ce lien peut voir et modifier la carte, gardez-le dans la corpo.</span>
-      <input id="shareLink" class="mono" readonly aria-label="Lien d'invitation">
-      <div class="row"><button type="button" id="btnCopyLink">Copier le lien</button></div>
-    </div>
+    <label class="f">Adresse du serveur d'accès (Cloudflare Worker)<input id="cWorker" class="mono" spellcheck="false" placeholder="https://petit-poucet.VOTRE-NOM.workers.dev"></label>
+    <label class="f">Adresse de la base Firebase (Realtime Database)<input id="cDb" class="mono" spellcheck="false" placeholder="https://mon-projet-default-rtdb.europe-west1.firebasedatabase.app"></label>
+    <label class="f">Clé API Web Firebase<input id="cKey" class="mono" spellcheck="false" placeholder="AIza…"></label>
+    <p class="note">Ces trois valeurs ne sont pas secrètes : la protection vient de la vérification d'identité par CCP et des règles de la base. Installation : bouton Aide, onglet « Partage sécurisé ».</p>
     <h3>3. Maison et hubs</h3>
     <label class="f">Votre système « maison » en k-space (facultatif)<input id="homeName" placeholder="ex. Hek"></label>
     <div class="row"><button type="button" class="primary" id="saveSetup">Enregistrer</button><button type="button" id="closeSetup">Fermer</button></div>
     <p class="note">Vos jetons de connexion EVE restent dans ce navigateur et ne sont envoyés qu'aux serveurs de CCP. La base Firebase ne reçoit que la carte et la position des pilotes.</p>
+  </div>
+</div>
+
+<!-- Accès par personnage -->
+<div class="modal" id="access" role="dialog" aria-modal="true" aria-labelledby="accessTitle">
+  <div class="mbox">
+    <h2 id="accessTitle">Accès</h2>
+    <h3>Carte affichée</h3>
+    <label class="f">Choisissez la carte à ouvrir<select id="mapSel"></select></label>
+    <p class="note" id="mapRoleNote"></p>
+    <div id="aclBox">
+      <h3>Joueurs autorisés sur votre carte</h3>
+      <form id="aclForm" class="row" autocomplete="off">
+        <input id="aclName" placeholder="Nom du personnage in-game" aria-label="Nom du personnage" style="flex:1;min-width:180px">
+        <select id="aclRole" aria-label="Droit d'accès"><option value="edit">Peut modifier</option><option value="view">Lecture seule</option></select>
+        <button type="submit" class="primary">Autoriser</button>
+      </form>
+      <div id="aclList"><span class="empty">Chargement…</span></div>
+      <p class="note">Seuls ces personnages peuvent ouvrir votre carte, après s'être connectés avec leur compte EVE. Retirer un joueur lui coupe l'accès immédiatement.</p>
+      <h3>Lien d'installation pour vos joueurs</h3>
+      <p class="note">À envoyer une seule fois à chaque joueur autorisé : il configure la carte chez lui. Ce lien ne donne aucun accès à lui seul.</p>
+      <input id="cfgLink" class="mono" readonly aria-label="Lien d'installation">
+      <div class="row"><button type="button" class="small" id="btnCopyCfg">Copier le lien</button></div>
+    </div>
+    <div class="row"><button type="button" id="closeAccess">Fermer</button></div>
   </div>
 </div>
 
@@ -253,7 +271,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
     <div class="tabs" role="tablist">
       <button type="button" role="tab" data-tab="h-use" aria-selected="true">Utilisation</button>
       <button type="button" role="tab" data-tab="h-gh" aria-selected="false">Mettre en ligne</button>
-      <button type="button" role="tab" data-tab="h-fb" aria-selected="false">Base partagée</button>
+      <button type="button" role="tab" data-tab="h-fb" aria-selected="false">Partage sécurisé</button>
       <button type="button" role="tab" data-tab="h-eve" aria-selected="false">Application EVE</button>
     </div>
     <div id="h-use" class="tabpane">
@@ -280,38 +298,82 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
       <p class="note">Le dépôt est public : n'y mettez que ce fichier. Il ne contient aucun mot de passe, et le lien de votre base n'est jamais écrit dedans.</p>
     </div>
     <div id="h-fb" class="tabpane" hidden>
-      <p class="note">Firebase (Google) stocke la carte commune gratuitement. Aucun moyen de paiement n'est demandé.</p>
+      <p class="note">Deux services gratuits : <b>Firebase</b> (Google) stocke les cartes, <b>Cloudflare</b> vérifie l'identité des joueurs auprès de CCP. Aucune carte bancaire n'est demandée. Comptez 20 à 30 minutes, une seule fois.</p>
+      <h3>A. Firebase</h3>
       <ol>
-        <li>Allez sur <a href="https://console.firebase.google.com/" target="_blank" rel="noopener">console.firebase.google.com</a> et connectez-vous avec un compte Google.</li>
-        <li><b>Créer un projet</b> (ex. <code>carte-wh</code>). Vous pouvez refuser Google Analytics.</li>
-        <li>Dans le menu de gauche : <b>Créer</b> (Build), puis <b>Realtime Database</b>, puis <b>Créer une base de données</b>. Emplacement : <b>Belgique (europe-west1)</b>. Mode : <b>verrouillé</b>.</li>
-        <li>Ouvrez l'onglet <b>Règles</b>, remplacez tout par le texte ci-dessous, puis <b>Publier</b> :</li>
+        <li>Sur <a href="https://console.firebase.google.com/" target="_blank" rel="noopener">console.firebase.google.com</a>, créez un projet (ex. <code>petit-poucet</code>). Google Analytics : inutile.</li>
+        <li>Menu <b>Créer</b> (Build) → <b>Authentication</b> → <b>Commencer</b>. N'activez aucun fournisseur : ce n'est pas nécessaire.</li>
+        <li>Menu <b>Créer</b> → <b>Realtime Database</b> → <b>Créer une base de données</b>. Emplacement : <b>Belgique (europe-west1)</b>, mode <b>verrouillé</b>.</li>
+        <li>Onglet <b>Règles</b> : remplacez tout par les règles ci-dessous, puis <b>Publier</b>.</li>
       </ol>
 <pre id="rulesText">{
   "rules": {
     ".read": false,
     ".write": false,
-    "rooms": {
-      "$room": {
-        ".read": "$room.length >= 24",
-        ".write": "$room.length >= 24"
+    "maps": {
+      "$owner": {
+        "ownerName": {
+          ".read": "auth != null &amp;&amp; ($owner === auth.uid || root.child('maps').child($owner).child('acl').child(auth.uid).exists())",
+          ".write": "auth != null &amp;&amp; $owner === auth.uid"
+        },
+        "acl": {
+          ".read": "auth != null &amp;&amp; ($owner === auth.uid || data.child(auth.uid).exists())",
+          ".write": "auth != null &amp;&amp; $owner === auth.uid"
+        },
+        "data": {
+          ".read": "auth != null &amp;&amp; ($owner === auth.uid || root.child('maps').child($owner).child('acl').child(auth.uid).exists())",
+          ".write": "auth != null &amp;&amp; ($owner === auth.uid || root.child('maps').child($owner).child('acl').child(auth.uid).child('role').val() === 'edit')"
+        },
+        "pilots": {
+          ".read": "auth != null &amp;&amp; ($owner === auth.uid || root.child('maps').child($owner).child('acl').child(auth.uid).exists())",
+          "$uid": {
+            ".write": "auth != null &amp;&amp; ($owner === auth.uid || ($uid === auth.uid &amp;&amp; root.child('maps').child($owner).child('acl').child(auth.uid).exists()))"
+          }
+        }
+      }
+    },
+    "access": {
+      "$uid": {
+        ".read": "auth != null &amp;&amp; $uid === auth.uid",
+        "$owner": {
+          ".write": "auth != null &amp;&amp; $owner === auth.uid"
+        }
       }
     }
   }
 }</pre>
       <div class="row"><button type="button" class="small" id="btnCopyRules">Copier les règles</button></div>
       <ol start="5">
-        <li>Revenez sur l'onglet <b>Données</b> et copiez l'adresse affichée en haut (elle se termine par <code>firebasedatabase.app</code>).</li>
-        <li>Dans la carte : <b>Réglages</b>, collez l'adresse, puis <b>Créer une carte partagée</b>. Envoyez le lien d'invitation à vos corpmates.</li>
+        <li>Onglet <b>Données</b> : copiez l'adresse en haut (elle finit par <code>firebasedatabase.app</code>).</li>
+        <li>Roue dentée → <b>Paramètres du projet</b> → onglet <b>Général</b> : copiez la <b>Clé API Web</b> (commence par <code>AIza</code>).</li>
+        <li>Même page, onglet <b>Comptes de service</b> → <b>Générer une nouvelle clé privée</b>. Un fichier .json se télécharge : <b>gardez-le secret</b>, ne le mettez jamais sur GitHub.</li>
       </ol>
-      <p class="note">Ces règles interdisent de lister les cartes : seule une personne qui connaît le code secret de votre carte (dans le lien d'invitation) peut la lire ou la modifier.</p>
+      <h3>B. Cloudflare</h3>
+      <ol>
+        <li>Créez un compte gratuit sur <a href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener">dash.cloudflare.com</a>.</li>
+        <li>Menu <b>Compute (Workers)</b> → <b>Workers &amp; Pages</b> → <b>Create</b> → <b>Start with Hello World</b>. Nom : <code>petit-poucet</code> → <b>Deploy</b>.</li>
+        <li><b>Edit code</b> : effacez tout, collez le code du serveur (bouton ci-dessous), puis <b>Deploy</b>.</li>
+        <li>Dans le Worker : <b>Settings</b> → <b>Variables and Secrets</b> → <b>Add</b>, quatre fois :
+          <br><code>ALLOWED_ORIGIN</code> = l'adresse de votre carte sans le / final (ex. <code>https://petit-poucet.github.io</code>)
+          <br><code>EVE_CLIENT_ID</code> = votre Client ID EVE
+          <br><code>FIREBASE_CLIENT_EMAIL</code> = la valeur <code>client_email</code> du fichier .json (type <b>Secret</b>)
+          <br><code>FIREBASE_PRIVATE_KEY</code> = la valeur <code>private_key</code> du fichier .json, de <code>-----BEGIN</code> à <code>END PRIVATE KEY-----</code> inclus (type <b>Secret</b>)</li>
+        <li>Copiez l'adresse du Worker (ex. <code>https://petit-poucet.votre-nom.workers.dev</code>). En l'ouvrant, vous devez lire <code>"configured":true</code>.</li>
+      </ol>
+      <div class="row"><button type="button" class="small" id="btnCopyWorker">Copier le code du serveur</button></div>
+      <h3>C. Dans la carte</h3>
+      <ol>
+        <li><b>Réglages</b> : collez l'adresse du Worker, l'adresse Firebase et la Clé API Web, puis <b>Enregistrer</b>.</li>
+        <li>Reconnectez-vous avec EVE si besoin : l'indicateur en haut passe à « Partagée · en direct ». Votre carte locale est envoyée automatiquement.</li>
+        <li>Bouton <b>Accès</b> : tapez le nom in-game d'un joueur, choisissez son droit, <b>Autoriser</b>. Envoyez-lui le lien d'installation.</li>
+      </ol>
     </div>
     <div id="h-eve" class="tabpane" hidden>
       <ol>
         <li>Sur <a href="https://developers.eveonline.com/" target="_blank" rel="noopener">developers.eveonline.com</a>, ouvrez votre application (ou créez-en une : <b>Authentication &amp; API Access</b>).</li>
         <li>Autorisations : cochez le groupe <code>esi-location</code> (position, en ligne, vaisseau).</li>
         <li><b>Callback URL</b> : l'adresse exacte affichée dans Réglages. En ligne, c'est votre adresse GitHub Pages, par exemple <code>https://VOTRE-PSEUDO.github.io/carte-wh/</code>.</li>
-        <li>Copiez le <b>Client ID</b> dans les Réglages. Il est inclus dans le lien d'invitation : vos corpmates n'ont rien à créer.</li>
+        <li>Copiez le <b>Client ID</b> dans les Réglages. Il est inclus dans le lien d'installation : vos joueurs n'ont rien à créer.</li>
       </ol>
     </div>
     <div class="row"><button type="button" id="closeHelp">Fermer</button></div>
@@ -319,6 +381,125 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 </div>
 
 <div id="toast" role="status" aria-live="polite"></div>
+<script type="text/plain" id="workerCode">/**
+ * Le Petit Poucet Galactique : serveur d'accès (Cloudflare Worker)
+ *
+ * Rôle : vérifier auprès de CCP qu'un joueur est bien le personnage EVE qu'il prétend être,
+ * puis lui délivrer un jeton Firebase à son nom (uid = "eve-<ID du personnage>").
+ * Les règles de la base Firebase décident ensuite qui peut lire ou modifier chaque carte.
+ *
+ * Variables à déclarer dans Cloudflare (Settings > Variables and Secrets) :
+ *   ALLOWED_ORIGIN         ex. https://petit-poucet.github.io   (plusieurs : séparées par des virgules)
+ *   EVE_CLIENT_ID          Client ID de votre application EVE
+ *   FIREBASE_CLIENT_EMAIL  "client_email" du fichier de clé du compte de service Firebase   (type Secret)
+ *   FIREBASE_PRIVATE_KEY   "private_key" du même fichier, copié tel quel                     (type Secret)
+ */
+
+const EVE_JWKS = 'https://login.eveonline.com/oauth/jwks';
+const EVE_ISSUERS = ['login.eveonline.com', 'https://login.eveonline.com'];
+const FIREBASE_AUD = 'https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit';
+
+let jwksCache = { keys: null, t: 0 };
+
+export default {
+  async fetch(request, env) {
+    const origin = request.headers.get('Origin') || '';
+    const allowed = String(env.ALLOWED_ORIGIN || '').split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean);
+    const okOrigin = allowed.includes(origin);
+    const cors = {
+      'Access-Control-Allow-Origin': okOrigin ? origin : (allowed[0] || 'null'),
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Max-Age': '86400',
+      'Vary': 'Origin'
+    };
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+
+    const url = new URL(request.url);
+    if (url.pathname === '/' && request.method === 'GET') {
+      return json({ ok: true, service: 'Petit Poucet Galactique', configured: !!(env.EVE_CLIENT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY && allowed.length) }, 200, cors);
+    }
+    if (url.pathname !== '/token' || request.method !== 'POST') return json({ error: 'Adresse inconnue' }, 404, cors);
+    if (!okOrigin) return json({ error: 'Site non autorisé : vérifiez ALLOWED_ORIGIN' }, 403, cors);
+    if (!env.EVE_CLIENT_ID || !env.FIREBASE_CLIENT_EMAIL || !env.FIREBASE_PRIVATE_KEY) return json({ error: 'Serveur incomplet : variables manquantes' }, 500, cors);
+
+    const eveToken = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+    if (!eveToken) return json({ error: 'Jeton EVE manquant' }, 401, cors);
+
+    let claims;
+    try { claims = await verifyEveToken(eveToken, env.EVE_CLIENT_ID); }
+    catch (e) { return json({ error: 'Jeton EVE refusé : ' + e.message }, 401, cors); }
+
+    const charId = Number(String(claims.sub).split(':').pop());
+    const uid = 'eve-' + charId;
+    try {
+      const token = await firebaseCustomToken(uid, { name: claims.name, charId }, env);
+      return json({ token, uid, name: claims.name, charId }, 200, cors);
+    } catch (e) {
+      return json({ error: 'Signature Firebase impossible : vérifiez FIREBASE_PRIVATE_KEY (' + e.message + ')' }, 500, cors);
+    }
+  }
+};
+
+/* ---------- Vérification du jeton EVE (signé par CCP) ---------- */
+async function verifyEveToken(token, clientId) {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new Error('format');
+  const header = JSON.parse(utf8(b64urlDecode(parts[0])));
+  const claims = JSON.parse(utf8(b64urlDecode(parts[1])));
+  if (header.alg !== 'RS256') throw new Error('algorithme');
+
+  const keys = await getJwks();
+  const jwk = keys.find(k => k.kid === header.kid && k.kty === 'RSA');
+  if (!jwk) throw new Error('clé de signature inconnue');
+  const key = await crypto.subtle.importKey('jwk', { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RS256', ext: true },
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64urlDecode(parts[2]),
+    new TextEncoder().encode(parts[0] + '.' + parts[1]));
+  if (!valid) throw new Error('signature invalide');
+
+  const now = Math.floor(Date.now() / 1000);
+  if (!claims.exp || claims.exp < now - 30) throw new Error('expiré');
+  if (!EVE_ISSUERS.includes(claims.iss)) throw new Error('émetteur');
+  const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!aud.includes(clientId)) throw new Error('application différente');
+  if (!/^CHARACTER:EVE:\d+$/.test(String(claims.sub))) throw new Error('personnage');
+  return claims;
+}
+async function getJwks() {
+  if (jwksCache.keys && Date.now() - jwksCache.t < 3600e3) return jwksCache.keys;
+  const r = await fetch(EVE_JWKS, { cf: { cacheTtl: 3600 } });
+  if (!r.ok) throw new Error('clés CCP indisponibles');
+  const j = await r.json();
+  jwksCache = { keys: j.keys || [], t: Date.now() };
+  return jwksCache.keys;
+}
+
+/* ---------- Jeton Firebase « custom token » signé avec le compte de service ---------- */
+async function firebaseCustomToken(uid, extraClaims, env) {
+  const pem = String(env.FIREBASE_PRIVATE_KEY).replace(/\\n/g, '\n').replace(/^"|"$/g, '');
+  const der = b64Decode(pem.replace(/-----(BEGIN|END) PRIVATE KEY-----/g, '').replace(/\s+/g, ''));
+  const key = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const payload = {
+    iss: env.FIREBASE_CLIENT_EMAIL, sub: env.FIREBASE_CLIENT_EMAIL, aud: FIREBASE_AUD,
+    iat: now, exp: now + 3600, uid, claims: extraClaims
+  };
+  const input = b64urlEncode(new TextEncoder().encode(JSON.stringify(header))) + '.' + b64urlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(input));
+  return input + '.' + b64urlEncode(new Uint8Array(sig));
+}
+
+/* ---------- Outils ---------- */
+function json(obj, status, headers) {
+  return new Response(JSON.stringify(obj), { status, headers: Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, headers) });
+}
+function b64Decode(s) { const bin = atob(s); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
+function b64urlDecode(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return b64Decode(s); }
+function b64urlEncode(bytes) { let bin = ''; for (const b of bytes) bin += String.fromCharCode(b); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function utf8(bytes) { return new TextDecoder().decode(bytes); }
+</script>
 
 <script>
 (() => {
@@ -331,7 +512,7 @@ const ESI_ROOT = 'https://esi.evetech.net';
 const SSO = 'https://login.eveonline.com/v2/oauth';
 const SCOPES = 'esi-location.read_location.v1 esi-location.read_online.v1 esi-location.read_ship_type.v1';
 const DATA_URL = 'https://raw.githubusercontent.com/wanderer-industries/wanderer/main/priv/repo/data/';
-const K = { cfg:'whmap.cfg', tok:'whmap.tok', map:'whmap.map', pkce:'whmap.pkce', me:'whmap.me', data:'whmap.data2' };
+const K = { cfg:'whmap.cfg', tok:'whmap.tok', map:'whmap.map', pkce:'whmap.pkce', me:'whmap.me', data:'whmap.data2', fb:'whmap.fb' };
 const NW = 156, NH = 62;
 const HUBS = [
   { id:30000142, name:'Jita' }, { id:30002187, name:'Amarr' }, { id:30002659, name:'Dodixie' },
@@ -361,7 +542,8 @@ const parseKg = s => { const v = Number(String(s || '').replace(/[\s  ,.]/g, 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const callbackUrl = location.origin + location.pathname.replace(/index\.html$/, '');
 
-let cfg = Object.assign({ clientId:'', poll:5, db:'', room:'', home:null, ships:[] }, store.get(K.cfg, {}));
+let cfg = Object.assign({ clientId:'', poll:5, home:null, ships:[], cloud:{ worker:'', db:'', apiKey:'' }, mapOwner:'' }, store.get(K.cfg, {}));
+if (!cfg.cloud) cfg.cloud = { worker:'', db:'', apiKey:'' };
 let tok = store.get(K.tok, null);
 let me = store.get(K.me, { current:null });
 let map = emptyMap();
@@ -397,10 +579,16 @@ function saveMe(){ store.set(K.me, me); }
 /* =========================================================
    Stockage : local ou partagé (Firebase Realtime Database, REST + flux)
    ========================================================= */
-const shared = () => !!(cfg.db && cfg.room) && !demoMode;
-const roomBase = () => `${cfg.db.replace(/\/+$/, '')}/rooms/${cfg.room}`;
-const cacheKey = () => shared() ? 'whmap.cache.' + cfg.room : K.map;
-let es = null, persistT = null, renderT = null;
+const cloudReady = () => !!(cfg.cloud && cfg.cloud.worker && cfg.cloud.db && cfg.cloud.apiKey);
+let fb = store.get(K.fb, null);           // jeton Firebase : { idToken, refresh, exp, uid, name }
+let myRole = 'owner';                     // owner | edit | view
+const shared = () => cloudReady() && !!fb && !!cfg.mapOwner && !demoMode;
+const dbRoot = () => cfg.cloud.db.replace(/\/+$/, '');
+const mapBase = () => `${dbRoot()}/maps/${cfg.mapOwner}`;
+const cacheKey = () => shared() ? 'whmap.cache.' + cfg.mapOwner : K.map;
+const remotePath = p => p.startsWith('pilots') ? p : 'data/' + p;
+const canEdit = () => !shared() || myRole !== 'view';
+let streams = [], persistT = null, renderT = null, reconnectT = null, roToast = 0;
 
 function persistLocal(){ clearTimeout(persistT); persistT = setTimeout(() => { if (!demoMode) store.set(cacheKey(), map); }, 300); }
 function scheduleRender(){ clearTimeout(renderT); renderT = setTimeout(renderAll, 60); }
@@ -412,20 +600,63 @@ function setAt(obj, parts, val){
   if (val === null || val === undefined) delete o[last]; else o[last] = val;
   return obj;
 }
+
+/* ---------- Connexion sécurisée : EVE → serveur Cloudflare → jeton Firebase ---------- */
+async function cloudLogin(){
+  if (!cloudReady() || !tok) return false;
+  await ensureToken();
+  let r, j;
+  try{ r = await fetch(cfg.cloud.worker.replace(/\/+$/, '') + '/token', { method:'POST', headers:{ Authorization:'Bearer ' + tok.access_token } }); }
+  catch(e){ throw new Error('Serveur d\'accès injoignable : vérifiez son adresse dans les Réglages.'); }
+  try{ j = await r.json(); }catch(e){ j = {}; }
+  if (!r.ok) throw new Error('Serveur d\'accès : ' + (j.error || ('erreur ' + r.status)));
+  const s2 = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(cfg.cloud.apiKey)}`,
+    { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ token:j.token, returnSecureToken:true }) });
+  const sj = await s2.json().catch(() => ({}));
+  if (!s2.ok) throw new Error('Firebase refuse la connexion : vérifiez la Clé API Web et que Authentication est activé (' + ((sj.error && sj.error.message) || s2.status) + ').');
+  fb = { idToken:sj.idToken, refresh:sj.refreshToken, exp:Date.now() + Number(sj.expiresIn || 3600) * 1000, uid:j.uid, name:j.name };
+  store.set(K.fb, fb);
+  if (!cfg.mapOwner) cfg.mapOwner = fb.uid;
+  saveCfg();
+  fbReq('PUT', `maps/${fb.uid}/ownerName`, fb.name).catch(() => {});
+  $('#btnAccess').hidden = false;
+  return true;
+}
+async function ensureFb(){
+  if (!fb) throw new Error('Non connecté au partage');
+  if (Date.now() < fb.exp - 120000) return;
+  const r = await fetch(`https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(cfg.cloud.apiKey)}`,
+    { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body:new URLSearchParams({ grant_type:'refresh_token', refresh_token:fb.refresh }) });
+  if (!r.ok){ fb = null; store.del(K.fb); throw new Error('Session de partage expirée, reconnectez-vous avec EVE.'); }
+  const j = await r.json();
+  fb.idToken = j.id_token; fb.refresh = j.refresh_token; fb.exp = Date.now() + Number(j.expires_in || 3600) * 1000;
+  store.set(K.fb, fb);
+}
+async function fbReq(method, path, body){
+  await ensureFb();
+  const r = await fetch(`${dbRoot()}/${path}.json?auth=${encodeURIComponent(fb.idToken)}`,
+    { method, headers:{ 'Content-Type':'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  if (!r.ok){ const e = new Error('Firebase ' + r.status); e.status = r.status; throw e; }
+  return r.json();
+}
 async function remote(method, path, body){
   if (!shared()) return;
-  try{
-    const r = await fetch(`${roomBase()}/${path}.json`, { method, headers:{ 'Content-Type':'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
-    if (!r.ok) throw new Error('Firebase ' + r.status);
-  }catch(e){ setSync('err', 'Partage : erreur d\'écriture'); }
+  try{ await fbReq(method, `maps/${cfg.mapOwner}/${remotePath(path)}`, body); }
+  catch(e){
+    if (e.status === 401 || e.status === 403){ setSync('err', 'Écriture refusée'); toast(myRole === 'view' ? 'Vous avez un accès en lecture seule à cette carte.' : 'La base a refusé la modification : votre accès a peut-être été retiré.', true); }
+    else setSync('err', 'Partage : erreur d\'écriture');
+  }
 }
+function readOnlyToast(){ if (Date.now() - roToast > 4000){ roToast = Date.now(); toast('Lecture seule : le propriétaire de la carte ne vous a pas donné le droit de la modifier.', true); } }
 /* Écrit une valeur (null = supprimer) localement et dans la base partagée */
 function put(path, val){
+  if (!canEdit() && !path.startsWith('pilots')){ readOnlyToast(); return; }
   setAt(map, path.split('/'), val === undefined ? null : JSON.parse(JSON.stringify(val)));
   persistLocal(); scheduleRender();
   if (val === null || val === undefined) remote('DELETE', path); else remote('PUT', path, val);
 }
 function patch(path, obj){
+  if (!canEdit()){ readOnlyToast(); return; }
   const parts = path.split('/');
   let o = map; for (const p of parts){ if (typeof o[p] !== 'object' || o[p] === null) o[p] = {}; o = o[p]; }
   Object.assign(o, JSON.parse(JSON.stringify(obj)));
@@ -433,32 +664,75 @@ function patch(path, obj){
   remote('PATCH', path, obj);
 }
 function setSync(state, text){ const s = $('#syncState'); s.className = 'sync' + (state ? ' ' + state : ''); s.textContent = text; }
+const liveLabel = () => myRole === 'view' ? 'Lecture seule · en direct' : (myRole === 'owner' ? 'Partagée · en direct' : 'Carte de ' + (mapOwnerName || 'un allié') + ' · en direct');
+let mapOwnerName = '';
 
-function connectShared(){
-  if (es){ es.close(); es = null; }
-  if (!shared()){ setSync('', demoMode ? 'Démo' : 'Carte locale'); return; }
+async function connectShared(){
+  streams.forEach(e => e.close()); streams = []; clearTimeout(reconnectT);
+  $('#btnAccess').hidden = !(cloudReady() && fb);
+  if (!shared()){ myRole = 'owner'; setSync('', demoMode ? 'Démo' : (cloudReady() && !tok ? 'Carte locale · connectez-vous' : 'Carte locale')); return; }
+  try{ await ensureFb(); }catch(e){ toast(e.message, true); setSync('err', 'Partage : reconnectez-vous'); return; }
   map = normalize(store.get(cacheKey(), null));
   setSync('', 'Connexion au partage…');
-  try{
-    es = new EventSource(`${roomBase()}.json`);
-  }catch(e){ setSync('err', 'Partage impossible'); return; }
-  es.addEventListener('put', ev => {
-    const { path, data } = JSON.parse(ev.data);
-    if (path === '/') map = normalize(data);
-    else { setAt(map, path.slice(1).split('/'), data); map = normalize(map); }
-    setSync('on', 'Partagée · en direct');
-    persistLocal(); scheduleRender();
-  });
-  es.addEventListener('patch', ev => {
-    const { path, data } = JSON.parse(ev.data);
-    const base = path === '/' ? [] : path.slice(1).split('/');
-    for (const k in data) setAt(map, base.concat(k.split('/')), data[k]);
+  // Rôle sur la carte affichée
+  if (cfg.mapOwner === fb.uid){ myRole = 'owner'; mapOwnerName = fb.name; }
+  else {
+    try{
+      const acl = await fbReq('GET', `maps/${cfg.mapOwner}/acl/${fb.uid}`);
+      if (!acl){ throw Object.assign(new Error('x'), { status:403 }); }
+      myRole = acl.role === 'edit' ? 'edit' : 'view';
+      mapOwnerName = await fbReq('GET', `maps/${cfg.mapOwner}/ownerName`).catch(() => '') || '';
+    }catch(e){
+      toast('Vous n\'avez plus accès à cette carte. Retour à votre propre carte.', true);
+      cfg.mapOwner = fb.uid; saveCfg(); return connectShared();
+    }
+  }
+  let firstData = true;
+  const open = (sub, apply) => {
+    const es = new EventSource(`${mapBase()}/${sub}.json?auth=${encodeURIComponent(fb.idToken)}`);
+    es.addEventListener('put', ev => { const { path, data } = JSON.parse(ev.data); apply(path, data); setSync('on', liveLabel()); persistLocal(); scheduleRender(); });
+    es.addEventListener('patch', ev => {
+      const { path, data } = JSON.parse(ev.data);
+      for (const k in data) apply((path === '/' ? '' : path) + '/' + k, data[k]);
+      persistLocal(); scheduleRender();
+    });
+    es.addEventListener('cancel', () => { setSync('err', 'Accès retiré'); toast('Le propriétaire de cette carte vous a retiré l\'accès.', true); streams.forEach(x => x.close()); });
+    es.addEventListener('auth_revoked', () => { connectShared(); });
+    es.onerror = () => setSync('err', 'Partage : reconnexion…');
+    streams.push(es);
+  };
+  open('data', (path, data) => {
+    if (path === '/'){
+      if (firstData && !data && myRole === 'owner'){
+        const local = normalize(store.get(K.map, null));
+        if (Object.keys(local.nodes).length){
+          remote('PUT', 'nodes', local.nodes); remote('PUT', 'links', local.links);
+          map.nodes = local.nodes; map.links = local.links; firstData = false;
+          toast('Votre carte locale a été envoyée sur votre carte partagée.');
+          return;
+        }
+      }
+      firstData = false;
+      const d = data || {};
+      map.nodes = d.nodes || {}; map.links = d.links || {}; map.log = d.log || {};
+    } else setAt(map, path.slice(1).split('/'), data);
     map = normalize(map);
-    persistLocal(); scheduleRender();
   });
-  es.addEventListener('cancel', () => { setSync('err', 'Accès refusé par la base'); toast('La base Firebase refuse l\'accès : vérifiez les règles (onglet Aide > Base partagée).', true); });
-  es.onerror = () => setSync('err', 'Partage : reconnexion…');
-  es.onopen = () => setSync('on', 'Partagée · en direct');
+  open('pilots', (path, data) => {
+    if (path === '/') map.pilots = data || {};
+    else setAt(map.pilots, path.slice(1).split('/'), data);
+  });
+  // Pour un invité : suit son propre droit en direct (changement de droit ou retrait)
+  if (myRole !== 'owner'){
+    open(`acl/${fb.uid}`, (path, data) => {
+      const role = path === '/' ? (data && data.role) : (path === '/role' ? data : undefined);
+      if (path === '/' && !data){ setSync('err', 'Accès retiré'); toast('Le propriétaire de cette carte vous a retiré l\'accès.', true); streams.forEach(x => x.close()); return; }
+      if (role !== undefined){ const before = myRole; myRole = role === 'edit' ? 'edit' : 'view'; if (before !== myRole){ toast(myRole === 'edit' ? 'Vous pouvez maintenant modifier cette carte.' : 'Votre accès est passé en lecture seule.'); lastSelKey = ''; } }
+    });
+  }
+  // Renouvelle le jeton et les flux avant expiration (jetons Firebase : 1 h)
+  reconnectT = setTimeout(connectShared, Math.max(60000, fb.exp - Date.now() - 180000));
+  publishPilot(true);
 }
 
 /* =========================================================
@@ -617,8 +891,9 @@ async function ensureToken(){
   await tokenRequest({ grant_type:'refresh_token', refresh_token:tok.refresh_token, client_id:cfg.clientId });
 }
 function logout(){
-  if (tok && shared()) put(`pilots/${tok.charId}`, null);
-  tok = null; store.del(K.tok); stopTracking(); renderPilot();
+  if (fb && shared()) remote('DELETE', `pilots/${fb.uid}`);
+  tok = null; store.del(K.tok); fb = null; store.del(K.fb); cfg.mapOwner = ''; saveCfg();
+  stopTracking(); map = normalize(store.get(K.map, null)); connectShared(); renderAll();
 }
 
 /* =========================================================
@@ -653,13 +928,13 @@ async function tick(){
 }
 let lastPilotPub = 0;
 function publishPilot(force){
-  if (!tok || !shared()) return;
+  if (!tok || !fb || !shared()) return;
   const now = Date.now();
-  const p = map.pilots[tok.charId];
+  const p = map.pilots[fb.uid];
   const changed = !p || p.sys != me.current || p.ship !== pilot.shipType || p.online !== pilot.online;
   if (!force && !changed && now - lastPilotPub < 60000) return;
   lastPilotPub = now;
-  put(`pilots/${tok.charId}`, { name:tok.charName, sys:me.current, ship:pilot.shipType || '', online:pilot.online, t:now });
+  put(`pilots/${fb.uid}`, { name:tok.charName, sys:me.current != null && map.nodes[me.current] ? me.current : null, ship:pilot.shipType || '', online:pilot.online, t:now });
 }
 
 async function ensureNode(id, nearId, info){
@@ -692,6 +967,7 @@ function addLink(a, b, gate){
 }
 async function arriveAt(id, info){
   if (id == null || me.current == id) return;
+  if (!canEdit()){ me.current = id; saveMe(); return; }
   const prev = me.current;
   await ensureNode(id, map.nodes[prev] ? prev : null, info);
   if (prev != null && map.nodes[prev] && !linkBetween(prev, id)){
@@ -800,7 +1076,7 @@ function activePilots(){
   const now = Date.now(), out = [];
   for (const id in map.pilots){
     const p = map.pilots[id]; if (!p) continue;
-    if (tok && String(id) === String(tok.charId)) continue;
+    if (fb && String(id) === String(fb.uid)) continue;
     if (now - (p.t || 0) > 15 * 60000 && !demoMode) continue;
     out.push(Object.assign({ id }, p));
   }
@@ -1382,25 +1658,22 @@ $('#btnLogin').addEventListener('click', () => tok ? logout() : login());
 /* =========================================================
    Réglages et partage
    ========================================================= */
-function randomRoom(){ return b64url(crypto.getRandomValues(new Uint8Array(24))).replace(/[-_]/g, 'x'); }
-function inviteLink(){
-  const payload = b64url(new TextEncoder().encode(JSON.stringify({ db:cfg.db, room:cfg.room, cid:cfg.clientId })));
-  return callbackUrl + '#rejoindre=' + payload;
+function cfgLink(){
+  const payload = b64url(new TextEncoder().encode(JSON.stringify({ w:cfg.cloud.worker, d:cfg.cloud.db, k:cfg.cloud.apiKey, cid:cfg.clientId })));
+  return callbackUrl + '#config=' + payload;
 }
 function refreshShareUi(){
-  const on = !!(cfg.db && cfg.room);
-  $('#shareState').textContent = on ? 'Carte partagée active : vos corpmates voient la même carte en direct.' : 'Carte locale : elle n\'est visible que dans ce navigateur.';
-  $('#btnCreateShare').hidden = on; $('#btnLeaveShare').hidden = !on;
-  $('#shareLinkBox').hidden = !on;
-  if (on) $('#shareLink').value = inviteLink();
+  $('#shareState').textContent = !cloudReady() ? 'Carte locale : elle n\'est visible que dans ce navigateur.'
+    : (fb ? `Partage sécurisé actif, connecté en tant que ${fb.name}.` : 'Partage configuré : connectez-vous avec EVE pour l\'activer.');
 }
 function openSetup(){
   $('#cbUrl').textContent = callbackUrl; $('#clientId').value = cfg.clientId || ''; $('#pollSel').value = String(cfg.poll || 5);
-  $('#dbUrl').value = cfg.db || ''; $('#homeName').value = cfg.home ? cfg.home.name : '';
+  $('#cWorker').value = cfg.cloud.worker || ''; $('#cDb').value = cfg.cloud.db || ''; $('#cKey').value = cfg.cloud.apiKey || '';
+  $('#homeName').value = cfg.home ? cfg.home.name : '';
   refreshShareUi(); $('#setup').classList.add('open'); $('#clientId').focus();
 }
 function closeSetup(){ $('#setup').classList.remove('open'); }
-function normDb(v){ v = (v || '').trim().replace(/\/+$/, ''); if (v && !/^https:\/\//.test(v)) v = 'https://' + v; return v; }
+function normUrl(v){ v = (v || '').trim().replace(/\/+$/, ''); if (v && !/^https?:\/\//.test(v)) v = 'https://' + v; return v; }
 $('#btnSetup').addEventListener('click', openSetup);
 $('#closeSetup').addEventListener('click', closeSetup);
 $('#saveSetup').addEventListener('click', async () => {
@@ -1410,43 +1683,92 @@ $('#saveSetup').addEventListener('click', async () => {
   else if (!cfg.home || cfg.home.name.toLowerCase() !== hn.toLowerCase()){
     try{ const s = await resolveSystem(hn); if (s) cfg.home = { id:s.id, name:s.name }; else toast(`Système « ${hn} » introuvable.`, true); }catch(e){ toast(e.message, true); }
   }
+  const nc = { worker:normUrl($('#cWorker').value), db:normUrl($('#cDb').value), apiKey:$('#cKey').value.trim() };
+  if (nc.db && !/^https:\/\/[^/]+\.(firebasedatabase\.app|firebaseio\.com)$/.test(nc.db)){ toast('L\'adresse Firebase doit se terminer par firebasedatabase.app.', true); return; }
+  const changed = JSON.stringify(nc) !== JSON.stringify(cfg.cloud);
+  cfg.cloud = nc;
+  if (changed){ fb = null; store.del(K.fb); cfg.mapOwner = ''; }
   saveCfg(); closeSetup(); toast('Réglages enregistrés'); renderExits();
   if (tok && !demoMode) startTracking();
+  if (changed && cloudReady() && tok){
+    try{ await cloudLogin(); toast('Partage sécurisé activé.'); }catch(e){ toast(e.message, true); }
+  }
+  if (changed) connectShared();
 });
-$('#btnCreateShare').addEventListener('click', async () => {
-  const db = normDb($('#dbUrl').value);
-  if (!/^https:\/\/[^/]+\.(firebasedatabase\.app|firebaseio\.com)$/.test(db)){ toast('Collez l\'adresse de votre Realtime Database (elle se termine par firebasedatabase.app).', true); return; }
-  cfg.clientId = $('#clientId').value.trim() || cfg.clientId;
-  const room = randomRoom();
-  const local = { nodes:map.nodes, links:map.links };
-  try{
-    const r = await fetch(`${db}/rooms/${room}.json`, { method:'PUT', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(Object.assign({ created:Date.now() }, local)) });
-    if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'La base refuse l\'écriture : collez les règles indiquées dans l\'Aide, puis réessayez.' : 'Firebase a répondu ' + r.status);
-  }catch(e){ toast(e.message || 'Impossible de joindre la base Firebase.', true); return; }
-  cfg.db = db; cfg.room = room; saveCfg();
-  connectShared(); refreshShareUi(); publishPilot(true);
-  toast('Carte partagée créée. Envoyez le lien d\'invitation à vos corpmates.');
-});
-$('#btnLeaveShare').addEventListener('click', () => {
-  const b = $('#btnLeaveShare');
-  if (!b.dataset.confirm){ b.dataset.confirm = '1'; b.textContent = 'Confirmer : revenir à la carte locale'; setTimeout(() => { delete b.dataset.confirm; b.textContent = 'Quitter la carte partagée'; }, 3500); return; }
-  if (tok) remote('DELETE', `pilots/${tok.charId}`);
-  cfg.room = ''; saveCfg(); delete b.dataset.confirm; b.textContent = 'Quitter la carte partagée';
-  map = normalize(store.get(K.map, null)); connectShared(); refreshShareUi(); renderAll();
-});
-$('#btnCopyLink').addEventListener('click', async () => { try{ await navigator.clipboard.writeText($('#shareLink').value); toast('Lien copié'); }catch(e){ $('#shareLink').select(); toast('Sélectionnez le lien et copiez-le avec Ctrl+C.', true); } });
-$('#btnCopyRules').addEventListener('click', async () => { try{ await navigator.clipboard.writeText($('#rulesText').textContent); toast('Règles copiées'); }catch(e){ toast('Sélectionnez le texte et copiez-le avec Ctrl+C.', true); } });
-function handleInvite(){
-  const m = /#rejoindre=([A-Za-z0-9_-]+)/.exec(location.hash);
+$('#btnCopyRules').addEventListener('click', () => copyText($('#rulesText').textContent, 'Règles copiées'));
+$('#btnCopyWorker').addEventListener('click', () => copyText($('#workerCode').textContent, 'Code du serveur copié'));
+async function copyText(t, msg){ try{ await navigator.clipboard.writeText(t); toast(msg); }catch(e){ toast('Copie impossible : sélectionnez le texte et faites Ctrl+C.', true); } }
+function handleConfigLink(){
+  const m = /#config=([A-Za-z0-9_-]+)/.exec(location.hash);
   if (!m) return;
   history.replaceState(null, '', callbackUrl);
   try{
     const j = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((m[1].length + 3) % 4)), c => c.charCodeAt(0))));
-    if (!j.db || !j.room) throw 0;
-    cfg.db = j.db; cfg.room = j.room; if (j.cid) cfg.clientId = j.cid; saveCfg();
-    toast('Vous avez rejoint la carte partagée de votre corpo.');
-  }catch(e){ toast('Lien d\'invitation invalide.', true); }
+    if (!j.w || !j.d || !j.k) throw 0;
+    cfg.cloud = { worker:j.w, db:j.d, apiKey:j.k }; if (j.cid) cfg.clientId = j.cid;
+    fb = null; store.del(K.fb); cfg.mapOwner = ''; saveCfg();
+    toast('Carte configurée. Connectez-vous avec EVE : si le propriétaire vous a autorisé, sa carte apparaîtra dans « Accès ».');
+  }catch(e){ toast('Lien d\'installation invalide.', true); }
 }
+
+/* ---------- Panneau Accès ---------- */
+async function openAccess(){
+  if (!fb){ toast('Connectez-vous d\'abord avec EVE.', true); return; }
+  $('#access').classList.add('open');
+  const sel = $('#mapSel');
+  sel.innerHTML = `<option value="${esc(fb.uid)}">Ma carte (${esc(fb.name)})</option>`;
+  try{
+    const acc = await fbReq('GET', `access/${fb.uid}`) || {};
+    for (const owner in acc) sel.insertAdjacentHTML('beforeend', `<option value="${esc(owner)}">Carte de ${esc(acc[owner] && acc[owner].name || owner)}</option>`);
+  }catch(e){}
+  sel.value = cfg.mapOwner || fb.uid;
+  const mine = sel.value === fb.uid;
+  $('#aclBox').hidden = !mine;
+  $('#mapRoleNote').textContent = mine ? 'Vous êtes propriétaire de cette carte.' : (myRole === 'edit' ? 'Vous pouvez modifier cette carte.' : 'Vous avez un accès en lecture seule à cette carte.');
+  if (mine){ $('#cfgLink').value = cfgLink(); loadAcl(); }
+}
+async function loadAcl(){
+  const box = $('#aclList');
+  try{
+    const acl = await fbReq('GET', `maps/${fb.uid}/acl`) || {};
+    const ids = Object.keys(acl).sort((a, b) => String(acl[a].name).localeCompare(String(acl[b].name)));
+    if (!ids.length){ box.innerHTML = '<span class="empty">Personne d\'autre n\'a accès à votre carte pour l\'instant.</span>'; return; }
+    box.innerHTML = `<table><thead><tr><th>Personnage</th><th>Droit</th><th></th></tr></thead><tbody>${ids.map(u => `
+      <tr><td><b>${esc(acl[u].name)}</b></td>
+      <td><select data-role="${esc(u)}" aria-label="Droit de ${esc(acl[u].name)}"><option value="edit"${acl[u].role === 'edit' ? ' selected' : ''}>Peut modifier</option><option value="view"${acl[u].role !== 'edit' ? ' selected' : ''}>Lecture seule</option></select></td>
+      <td class="r"><button type="button" class="small danger" data-del="${esc(u)}">Retirer</button></td></tr>`).join('')}</tbody></table>`;
+    box.querySelectorAll('[data-role]').forEach(x => x.addEventListener('change', async () => {
+      try{ await fbReq('PUT', `maps/${fb.uid}/acl/${x.dataset.role}/role`, x.value); toast('Droit modifié'); }catch(e){ toast('Modification refusée par la base.', true); }
+    }));
+    box.querySelectorAll('[data-del]').forEach(x => x.addEventListener('click', async () => {
+      const u = x.dataset.del;
+      try{ await fbReq('DELETE', `maps/${fb.uid}/acl/${u}`); await fbReq('DELETE', `access/${u}/${fb.uid}`); await fbReq('DELETE', `maps/${fb.uid}/pilots/${u}`).catch(() => {}); toast('Accès retiré'); loadAcl(); }
+      catch(e){ toast('Retrait refusé par la base.', true); }
+    }));
+  }catch(e){ box.innerHTML = '<span class="badline">Impossible de lire la liste : vérifiez les règles Firebase (Aide).</span>'; }
+}
+$('#btnAccess').addEventListener('click', openAccess);
+$('#closeAccess').addEventListener('click', () => $('#access').classList.remove('open'));
+$('#btnCopyCfg').addEventListener('click', () => copyText($('#cfgLink').value, 'Lien copié'));
+$('#mapSel').addEventListener('change', async e => {
+  cfg.mapOwner = e.target.value; saveCfg(); sel = null; lastSelKey = '';
+  await connectShared(); renderAll(); center(); openAccess();
+});
+$('#aclForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const name = $('#aclName').value.trim(); if (!name) return;
+  try{
+    const r = await fetch(ESI + '/universe/ids/', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify([name]) });
+    const j = r.ok ? await r.json() : {};
+    const c = j.characters && j.characters[0];
+    if (!c){ toast(`Personnage « ${name} » introuvable. Vérifiez l'orthographe exacte du nom in-game.`, true); return; }
+    const uid = 'eve-' + c.id;
+    if (uid === fb.uid){ toast('C\'est votre propre personnage : vous avez déjà accès.', true); return; }
+    await fbReq('PUT', `maps/${fb.uid}/acl/${uid}`, { name:c.name, role:$('#aclRole').value, t:Date.now() });
+    await fbReq('PUT', `access/${uid}/${fb.uid}`, { name:fb.name, t:Date.now() });
+    $('#aclName').value = ''; toast(`${c.name} a maintenant accès à votre carte.`); loadAcl();
+  }catch(e){ toast('Ajout refusé : ' + (e.status ? 'vérifiez les règles Firebase.' : e.message), true); }
+});
 
 /* Aide */
 $('#btnHelp').addEventListener('click', () => $('#help').classList.add('open'));
@@ -1455,16 +1777,19 @@ document.querySelectorAll('#help [role=tab]').forEach(b => b.addEventListener('c
   document.querySelectorAll('#help [role=tab]').forEach(x => x.setAttribute('aria-selected', String(x === b)));
   document.querySelectorAll('#help .tabpane').forEach(p => p.hidden = p.id !== b.dataset.tab);
 }));
-document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeSetup(); $('#help').classList.remove('open'); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeSetup(); $('#help').classList.remove('open'); $('#access').classList.remove('open'); } });
 
 /* =========================================================
    Démarrage
    ========================================================= */
 (async () => {
-  handleInvite();
+  handleConfigLink();
   await handleCallback();
+  if (tok && cloudReady() && (!fb || fb.uid !== 'eve-' + tok.charId)){
+    try{ await cloudLogin(); }catch(e){ toast(e.message, true); }
+  }
   map = normalize(store.get(cacheKey(), null));
-  connectShared();
+  await connectShared();
   renderAll(); center();
   loadWhData(); loadActivity();
   setInterval(() => { loadActivity(); if (!drag) render(); renderPilots(); }, 30000);
