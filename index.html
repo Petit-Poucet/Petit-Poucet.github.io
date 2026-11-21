@@ -268,7 +268,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v5.8</span>
+  <span class="ver" id="appVersion" title="Map version">v5.9</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -503,7 +503,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '5.8';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '5.9';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -1531,11 +1531,10 @@ async function toggleAssets(){
   else toast(`Assets found in ${total} system${total > 1 ? 's' : ''}. Only systems on the map show a 📦 badge.`);
 }
 function getMapHtml(){
-  const owner = esc((SITE_LOCK && SITE_LOCK.ownerName) || 'cloporte');
   return `<h4>🗺️ Want your own map?</h4><ol>
-<li>Choose the character that will <b>own</b> your group's map (usually your corporation's director).</li>
-<li>Send an <b>EVE mail</b> in game to <b>${owner}</b> with that character's exact name and your corporation.</li>
-<li>Once you are added, open <b>petit-poucet.github.io</b> and log in with that character: your own map opens automatically.</li>
+<li>Log in to EVE with the character that will <b>own</b> your group's map (usually your corporation's director).</li>
+<li>From that character, send a <b>private EVE mail</b> to <b>Sava Yesh</b> with the subject <b>Map request</b>.</li>
+<li>You will get an EVE mail back once it is approved. Then open <b>petit-poucet.github.io</b> and log in with that character: your own map opens automatically.</li>
 <li>Invite up to <b>2 more characters</b> from <i>Access</i>.</li></ol>
 <p class="gm-note">Free. Each map is private: no one else sees it. Places are limited, so requests are approved by hand.</p>`;
 }
