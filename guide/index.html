@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anoikis Traveler · Wormhole Mapper for EVE Online</title>
+<meta name="description" content="Anoikis Traveler: a free, private, shared wormhole mapper for EVE Online. Live chain tracking, Thera and Turnur routes, 3D view.">
+<meta name="theme-color" content="#070a12">
+<style>
+:root{--bg:#070a12;--panel:#0e1424;--panel2:#141c30;--line:#24314c;--text:#e2e8f3;--dim:#8b98b0;--accent:#f2a74b;--ok:#5fd68a;--c2:#4f8de8;--eol:#c07cff;
+  --display:"Saira Condensed","Arial Narrow",sans-serif;--body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Consolas,monospace}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 var(--body)}
+a{color:var(--accent)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+/* top bar */
+header.top{position:sticky;top:0;z-index:10;background:rgba(7,10,18,.88);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+header.top .wrap{display:flex;align-items:center;gap:18px;height:60px}
+.brand{font:700 22px var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--text);text-decoration:none;white-space:nowrap}
+.brand b{color:var(--accent)}
+nav.links{display:flex;gap:16px;margin-left:auto;font-size:14px}
+nav.links a{color:var(--dim);text-decoration:none}nav.links a:hover{color:var(--text)}
+.lang{display:flex;gap:2px;border:1px solid var(--line);border-radius:7px;padding:2px}
+.lang button{font:600 12px var(--mono);background:none;border:0;color:var(--dim);padding:5px 8px;border-radius:5px;cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--accent);color:#1b1206}
+/* hero */
+.hero{padding:70px 0 40px;background:radial-gradient(ellipse at 70% 0%,rgba(79,141,232,.18),transparent 60%),radial-gradient(ellipse at 10% 30%,rgba(242,167,75,.10),transparent 55%)}
+.hero h1{font:700 clamp(40px,7vw,72px)/1 var(--display);letter-spacing:.04em;text-transform:uppercase;margin:0 0 14px}
+.hero h1 b{color:var(--accent)}
+.hero .tag{font-size:clamp(18px,2.3vw,22px);color:var(--text);max-width:720px;margin:0 0 10px}
+.hero .sub{color:var(--dim);max-width:720px;margin:0 0 26px}
+.btns{display:flex;gap:12px;flex-wrap:wrap}
+.btn{display:inline-block;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px;border:1px solid var(--line);color:var(--text);background:var(--panel2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#1b1206}
+.btn:hover{filter:brightness(1.12)}
+.shot{margin:40px 0 0;border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55)}
+.shot img{display:block;width:100%;height:auto}
+/* sections */
+section{padding:64px 0;border-top:1px solid var(--line)}
+h2{font:700 34px var(--display);letter-spacing:.05em;text-transform:uppercase;margin:0 0 8px}
+.lead{color:var(--dim);margin:0 0 30px;max-width:760px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.card .ic{font-size:24px;line-height:1}
+.card h3{margin:10px 0 6px;font-size:17px}
+.card p{margin:0;color:var(--dim);font-size:14.5px}
+/* gallery */
+.gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:22px}
+@media(max-width:520px){.gal{grid-template-columns:1fr}}
+figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+figure img{display:block;width:100%;height:auto;cursor:zoom-in}
+figcaption{padding:12px 14px;color:var(--dim);font-size:14px}
+figcaption b{color:var(--text)}
+/* tutorial */
+.steps{counter-reset:s;display:grid;gap:14px}
+.step{counter-increment:s;display:grid;grid-template-columns:52px 1fr;gap:16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.step::before{content:counter(s);display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--panel2);border:1px solid var(--accent);color:var(--accent);font:700 20px var(--display)}
+.step h3{margin:2px 0 6px;font-size:18px}
+.step p,.step li{color:var(--dim);margin:0 0 6px;font-size:15px}
+.step ul{margin:4px 0 0;padding-left:20px}
+.step b,.step strong{color:var(--text)}
+kbd{font:600 12.5px var(--mono);background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 6px;color:var(--text)}
+.k{font:600 13px var(--mono);border-radius:4px;padding:1px 6px;border:1px solid var(--line);color:var(--text);white-space:nowrap}
+.k.gold{color:#f5c542;border-color:#7a6220}.k.ok{color:var(--ok);border-color:#24533a}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center;margin:8px 0 2px;font-size:14px;color:var(--dim)}
+.legend i{display:block;width:34px;height:0;border-top:3px solid #8fb2e8}
+.legend i.mass{border-top-style:dashed;border-color:#f2c94b}.legend i.crit{border-top-style:dotted;border-color:#ef5a5a}.legend i.eol{border-color:var(--eol)}.legend i.gate{border-top:2px dotted #6b7890}
+/* request + support */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:820px){.two{grid-template-columns:1fr}}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px}
+.box h3{margin:0 0 10px;font-size:20px}
+.box ol{margin:0;padding-left:22px;color:var(--dim)}.box ol li{margin:0 0 8px}.box ol b{color:var(--text)}
+.box p{color:var(--dim)}
+.box.isk{border-color:#24533a;background:linear-gradient(135deg,#0f1d16,#121722)}
+.box.raf{border-color:#2a3d66;background:linear-gradient(135deg,#0f1628,#121722)}
+.copy{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
+.copy code{font:600 17px var(--mono);color:var(--ok);background:#0b1a12;border:1px solid #24533a;border-radius:6px;padding:6px 10px}
+button.small{font:inherit;font-size:14px;padding:7px 12px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--text);cursor:pointer}
+.mini{font-size:13px;color:var(--dim)}
+/* faq */
+details{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:0 0 10px}
+summary{cursor:pointer;font-weight:600}
+details p{color:var(--dim);margin:10px 0 0}
+footer{border-top:1px solid var(--line);padding:30px 0 44px;color:var(--dim);font-size:13px}
+/* lightbox */
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;place-items:center;z-index:50;cursor:zoom-out;padding:20px}
+#lb.on{display:grid}#lb img{max-width:100%;max-height:100%;border-radius:8px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--ok);color:var(--ok);padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.on{opacity:1}
+@media(max-width:760px){nav.links{display:none}.lang{margin-left:auto}}
+@media(max-width:430px){.brand{font-size:17px}header.top .wrap{gap:10px;padding:0 12px}.lang button{padding:5px 6px}}
+section,.hero{scroll-margin-top:64px}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="#">Anoikis <b>Traveler</b></a>
+  <nav class="links">
+    <a href="#features" data-i18n="nav_features"></a>
+    <a href="#tutorial" data-i18n="nav_tutorial"></a>
+    <a href="#request" data-i18n="nav_request"></a>
+    <a href="#faq" data-i18n="nav_faq"></a>
+    <a href="#support" data-i18n="nav_support"></a>
+  </nav>
+  <div class="lang" role="group" aria-label="Language">
+    <button type="button" data-lang="en">EN</button><button type="button" data-lang="fr">FR</button><button type="button" data-lang="de">DE</button><button type="button" data-lang="es">ES</button>
+  </div>
+</div></header>
+
+<div class="hero"><div class="wrap">
+  <h1>Anoikis <b>Traveler</b></h1>
+  <p class="tag" data-i18n="hero_tag"></p>
+  <p class="sub" data-i18n="hero_sub"></p>
+  <div class="btns">
+    <a class="btn primary" href="../?demo" data-i18n="btn_demo"></a>
+    <a class="btn" href="../" data-i18n="btn_open"></a>
+    <a class="btn" href="#request" data-i18n="btn_request"></a>
+  </div>
+  <div class="shot"><img src="img/overview.jpg" width="1600" height="900" data-i18n-alt="alt_overview" alt=""></div>
+</div></div>
+
+<section id="features"><div class="wrap">
+  <h2 data-i18n="feat_title"></h2>
+  <p class="lead" data-i18n="feat_lead"></p>
+  <div class="grid">
+    <div class="card"><div class="ic">🧭</div><h3 data-i18n="f1_t"></h3><p data-i18n="f1_p"></p></div>
+    <div class="card"><div class="ic">👥</div><h3 data-i18n="f2_t"></h3><p data-i18n="f2_p"></p></div>
+    <div class="card"><div class="ic">🔗</div><h3 data-i18n="f3_t"></h3><p data-i18n="f3_p"></p></div>
+    <div class="card"><div class="ic">🌀</div><h3 data-i18n="f4_t"></h3><p data-i18n="f4_p"></p></div>
+    <div class="card"><div class="ic">🛣️</div><h3 data-i18n="f5_t"></h3><p data-i18n="f5_p"></p></div>
+    <div class="card"><div class="ic">⚠️</div><h3 data-i18n="f6_t"></h3><p data-i18n="f6_p"></p></div>
+    <div class="card"><div class="ic">🪐</div><h3 data-i18n="f7_t"></h3><p data-i18n="f7_p"></p></div>
+    <div class="card"><div class="ic">📦</div><h3 data-i18n="f8_t"></h3><p data-i18n="f8_p"></p></div>
+  </div>
+</div></section>
+
+<section id="screens"><div class="wrap">
+  <h2 data-i18n="shots_title"></h2>
+  <p class="lead" data-i18n="shots_lead"></p>
+  <div class="gal">
+    <figure><img src="img/system.jpg" width="1600" height="900" loading="lazy" data-i18n-alt="cap_system" alt=""><figcaption data-i18n="cap_system_html"></figcaption></figure>
+    <figure><img src="img/thera.jpg" width="1600" height="900" loading="lazy" data-i18n-alt="cap_thera" alt=""><figcaption data-i18n="cap_thera_html"></figcaption></figure>
+    <figure><img src="img/view3d.jpg" width="1600" height="900" loading="lazy" data-i18n-alt="cap_3d" alt=""><figcaption data-i18n="cap_3d_html"></figcaption></figure>
+    <figure><img src="img/overview.jpg" width="1600" height="900" loading="lazy" data-i18n-alt="cap_chain" alt=""><figcaption data-i18n="cap_chain_html"></figcaption></figure>
+  </div>
+</div></section>
+
+<section id="tutorial"><div class="wrap">
+  <h2 data-i18n="tut_title"></h2>
+  <p class="lead" data-i18n="tut_lead"></p>
+  <div class="steps">
+    <div class="step"><div><h3 data-i18n="s1_t"></h3><div data-i18n="s1_p"></div></div></div>
+    <div class="step"><div><h3 data-i18n="s2_t"></h3><div data-i18n="s2_p"></div></div></div>
+    <div class="step"><div><h3 data-i18n="s3_t"></h3><div data-i18n="s3_p"></div></div></div>
+    <div class="step"><div><h3 data-i18n="s4_t"></h3><div data-i18n="s4_p"></div></div></div>
+    <div class="step"><div><h3 data-i18n="s5_t"></h3><div data-i18n="s5_p"></div>
+      <div class="legend"><i></i><span data-i18n="lg_stable"></span><i class="mass"></i><span data-i18n="lg_mass"></span><i class="crit"></i><span data-i18n="lg_crit"></span><i class="eol"></i><span data-i18n="lg_eol"></span><i class="gate"></i><span data-i18n="lg_gate"></span></div></div></div>
+    <div class="step"><div><h3 data-i18n="s6_t"></h3><div data-i18n="s6_p"></div></div></div>
+    <div class="step"><div><h3 data-i18n="s7_t"></h3><div data-i18n="s7_p"></div></div></div>
+    <div class="step"><div><h3 data-i18n="s8_t"></h3><div data-i18n="s8_p"></div></div></div>
+    <div class="step"><div><h3 data-i18n="s9_t"></h3><div data-i18n="s9_p"></div></div></div>
+    <div class="step"><div><h3 data-i18n="s10_t"></h3><div data-i18n="s10_p"></div></div></div>
+  </div>
+</div></section>
+
+<section id="request"><div class="wrap">
+  <h2 data-i18n="req_title"></h2>
+  <p class="lead" data-i18n="req_lead"></p>
+  <div class="two">
+    <div class="box"><h3 data-i18n="req_how"></h3><ol data-i18n="req_steps"></ol></div>
+    <div class="box"><h3 data-i18n="req_what"></h3><div data-i18n="req_what_p"></div>
+      <div class="copy"><code>Sava Yesh</code><button type="button" class="small" data-copy="Sava Yesh" data-i18n="copy_name"></button><code>Map request</code><button type="button" class="small" data-copy="Map request" data-i18n="copy_subject"></button></div></div>
+  </div>
+</div></section>
+
+<section id="faq"><div class="wrap">
+  <h2 data-i18n="faq_title"></h2>
+  <details><summary data-i18n="q1"></summary><p data-i18n="a1"></p></details>
+  <details><summary data-i18n="q2"></summary><p data-i18n="a2"></p></details>
+  <details><summary data-i18n="q3"></summary><p data-i18n="a3"></p></details>
+  <details><summary data-i18n="q4"></summary><p data-i18n="a4"></p></details>
+  <details><summary data-i18n="q5"></summary><p data-i18n="a5"></p></details>
+  <details><summary data-i18n="q6"></summary><p data-i18n="a6"></p></details>
+</div></section>
+
+<section id="support"><div class="wrap">
+  <h2 data-i18n="sup_title"></h2>
+  <p class="lead" data-i18n="sup_lead"></p>
+  <div class="two">
+    <div class="box isk"><h3>☕ <span data-i18n="isk_t"></span></h3><p data-i18n="isk_p"></p>
+      <div class="copy"><code>Sava Yesh</code><button type="button" class="small" data-copy="Sava Yesh" data-i18n="copy_name"></button></div>
+      <p class="mini" data-i18n="isk_note"></p></div>
+    <div class="box raf"><h3>🚀 <span data-i18n="raf_t"></span></h3><p data-i18n="raf_p"></p>
+      <a class="btn primary" id="rafLink" href="https://www.eveonline.com/signup?invc=b5f2b5a8-f7f6-41a0-a7d1-8d18d73bc63e" target="_blank" rel="noopener" data-i18n="raf_btn"></a>
+      <p class="mini" data-i18n="raf_note"></p></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <p>© 2026 cloporte · Anoikis Traveler · <span data-i18n="rights"></span></p>
+  <p data-i18n="ccp"></p>
+</div></footer>
+
+<div id="lb"><img alt=""></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const RAF = 'b5f2b5a8-f7f6-41a0-a7d1-8d18d73bc63e';
+const T = {
+en:{
+nav_features:'Features',nav_tutorial:'Tutorial',nav_request:'Get a map',nav_faq:'FAQ',nav_support:'Support',
+hero_tag:'A shared wormhole mapper for EVE Online that follows your trail through Anoikis.',
+hero_sub:'Log in with EVE and fly: every jump is added to your group\'s map in real time. Thera and Turnur connections, routes to trade hubs and a 3D view are built in. Free, private and nothing to install.',
+btn_demo:'Try the demo',btn_open:'Open the map',btn_request:'Get your own map',
+alt_overview:'Anoikis Traveler showing a wormhole chain with pilots, connections and the Thera panel',
+feat_title:'Features',feat_lead:'Everything a wormhole group needs to scout, roll and get home, on one screen.',
+f1_t:'Automatic tracking',f1_p:'The map follows your character: each system you jump into is added with its connection, live.',
+f2_t:'Shared with your group',f2_p:'Everyone on the map sees the same chain and where every pilot is. Green means the map is open, the EVE badge means in game.',
+f3_t:'Connection details',f3_p:'Wormhole type, mass state, end of life, a mass calculator and a log of passes shared with the whole group.',
+f4_t:'Thera & Turnur',f4_p:'Live EVE-Scout data. The hubs stay out of the way and only join your chain when you are connected to them.',
+f5_t:'Routes to trade hubs',f5_p:'Jita, Amarr, Dodixie, Rens and Hek: the shortest route, the safest route and the shortest route avoiding Thera and Turnur.',
+f6_t:'Danger alerts',f6_p:'Recent kills are highlighted on the map, with an alarm when a system has 3 or more kills in 10 minutes.',
+f7_t:'3D view',f7_p:'Turn the chain in 3D around the selected system to read big chains at a glance.',
+f8_t:'Assets & destination',f8_p:'See where your characters have assets, get a reminder after each jump, and send a route straight to your EVE client.',
+shots_title:'Screenshots',shots_lead:'Taken from the demo, which you can try without logging in.',
+cap_system:'A selected system with its details',cap_system_html:'<b>System details.</b> Click a system: class, region, recent kills, shared notes, signatures and the route from you.',
+cap_thera:'Thera connected to the chain',cap_thera_html:'<b>Thera & Turnur.</b> Every exit with its size, time left and jumps from your current system.',
+cap_3d:'The 3D view',cap_3d_html:'<b>3D view.</b> The chain turns around the selected system; hub exits are spread in height.',
+cap_chain:'A wormhole chain',cap_chain_html:'<b>The chain.</b> Colours show the system class, line styles show the state of each connection.',
+tut_title:'Tutorial',tut_lead:'Ten steps to go from your first login to a fully shared chain. You can practise everything in the demo first.',
+s1_t:'Log in with EVE',
+s1_p:'<p>Click <span class="k">EVE login</span>. You sign in on CCP\'s official page: the map never sees your password.</p><p>Accept the permissions: <b>location, online status and ship</b> are needed to follow you. <b>Waypoints, assets and structures</b> are optional and unlock the matching features.</p>',
+s2_t:'Fly: your trail draws itself',
+s2_p:'<p>Every jump adds the new system and the connection you took. Your system is marked <b>▼ You</b>, and your corpmates appear on their own systems.</p><p>The <b>Pilots</b> panel lists everyone: a green dot means their map is open, the <span class="k ok">EVE</span> badge means they are in game.</p>',
+s3_t:'Read a system',
+s3_p:'<p>Click a system to see its class, statics, effect, kills in the last hour, the route from you and shared notes for your group (residents, structures, dangers).</p><p>Move around: drag a system to place it, wheel to zoom, drag the background to pan. <span class="k">Recenter</span> brings the view back to the selected system.</p>',
+s4_t:'Paste your signatures',
+s4_p:'<p>In the in-game probe scanner press <kbd>Ctrl</kbd>+<kbd>A</kbd> then <kbd>Ctrl</kbd>+<kbd>C</kbd>, and paste into the system\'s <b>Signatures</b> box, then click <span class="k">Import</span>. Tick <i>Remove signatures that are gone</i> to clean up old ones.</p>',
+s5_t:'Mark your connections',
+s5_p:'<p>Click a connection to set the hole type (e.g. H296), its mass and end of life. The mass calculator and <b>Add a pass</b> track how much mass is left, for the whole group.</p>',
+lg_stable:'Stable wormhole',lg_mass:'Mass reduced',lg_crit:'Mass critical',lg_eol:'End of life (EOL)',lg_gate:'Stargate',
+s6_t:'ENTER, EXIT and Home',
+s6_p:'<p><span class="k gold">ENTER</span> marks your current system as the way in, <span class="k ok">EXIT</span> as the way home. Click again to remove the mark. <span class="k">Home</span> sets your base and <span class="k">My location</span> jumps the view to you.</p>',
+s7_t:'Thera, Turnur and trade hubs',
+s7_p:'<p>The <span class="k">🌀 Thera / Turnur</span> button shows or hides the hubs; they appear by themselves when your chain links to them. In the right panel:</p><ul><li><b>Thera / Turnur</b>: every exit, sorted by jumps from your current system, without going through the other hub; a shortcut through the other hub is shown only when it is shorter.</li><li><b>Routes to trade hubs</b>: shortest, safest, and shortest avoiding both hubs.</li></ul>',
+s8_t:'Send a route to EVE',
+s8_p:'<p>In a system\'s panel, <span class="k">Set destination</span> or <span class="k">Add waypoint</span> sends the route straight to your EVE client (needs the waypoint permission).</p>',
+s9_t:'3D view and assets',
+s9_p:'<p><span class="k">3D view</span> rotates the chain around the selected system: drag to rotate, <kbd>Shift</kbd>+drag to pan, wheel to zoom.</p><p><span class="k">📦 Assets</span> marks the systems where your characters have assets. After each wormhole jump, a window lists the ones within the range you choose.</p>',
+s10_t:'Share with your group',
+s10_p:'<p>The map owner opens <span class="k">Access</span> and invites up to <b>2 more characters</b>, with edit or read-only rights. They log in on the same page and land on your map automatically. Nobody else can see it.</p>',
+req_title:'Get your own map',req_lead:'Maps are free but places are limited, so each request is approved by hand.',
+req_how:'How to ask',
+req_steps:'<li>Log in to EVE with the character that will <b>own</b> your group\'s map (usually your corporation\'s director).</li><li>From that character, send a <b>private EVE mail</b> to <b>Sava Yesh</b> with the subject <b>Map request</b>.</li><li>You get an EVE mail back once it is approved.</li><li>Open the map and log in with that character: your map opens automatically. Invite up to 2 more characters from <b>Access</b>.</li>',
+req_what:'What to send',req_what_p:'<p>Just the mail: the sender is the character who will own the map. You can add your corporation and how you plan to use it.</p>',
+copy_name:'Copy name',copy_subject:'Copy subject',copied:'Copied',
+faq_title:'FAQ',
+q1:'Is it free?',a1:'Yes. Donations are welcome but unlock nothing: everyone gets the same map.',
+q2:'Is my account safe?',a2:'You log in on CCP\'s official EVE SSO page, so the map never sees your password. It only reads what you allow (location, ship, assets) and can only write waypoints. You can revoke access at any time on the EVE website, under third-party applications.',
+q3:'Who can see my map?',a3:'Only the owner and the characters they invite. Each group\'s map is private.',
+q4:'Do I need to install anything?',a4:'No. It runs in your web browser, best on a computer next to your EVE client.',
+q5:'Is it allowed by CCP?',a5:'It uses CCP\'s official ESI interface, like other third-party EVE tools. It is a fan project, not affiliated with or endorsed by CCP.',
+q6:'Where does the Thera and Turnur data come from?',a6:'From EVE-Scout, run by Signal Cartel, refreshed every 5 minutes.',
+sup_title:'Support the project',sup_lead:'Anoikis Traveler is free and has no ads. If you like it, here are two ways to help.',
+isk_t:'Send ISK',isk_p:'In game, give ISK to the character below. Every donation helps keep the map running.',isk_note:'Donating gives no extra access: everyone gets the same map.',
+raf_t:'New to EVE? Join with our link',raf_p:'Create your EVE Online account through cloporte\'s Recruit a Friend link: you get CCP\'s welcome bonus and it supports the project.',raf_btn:'Create an EVE account',raf_note:'Official CCP Recruit a Friend programme. Rewards are set by CCP.',
+rights:'All rights reserved.',ccp:'EVE Online and all related names and images are the property of CCP hf. This tool is not affiliated with or endorsed by CCP hf.'
+},
+fr:{
+nav_features:'Fonctions',nav_tutorial:'Tutoriel',nav_request:'Avoir une carte',nav_faq:'FAQ',nav_support:'Soutenir',
+hero_tag:'Une carte de wormholes partagée pour EVE Online, qui suit votre trace à travers Anoikis.',
+hero_sub:'Connectez-vous avec EVE et volez : chaque saut s\'ajoute en direct à la carte de votre groupe. Connexions Thera et Turnur, routes vers les hubs de commerce et vue 3D sont incluses. Gratuit, privé, rien à installer.',
+btn_demo:'Essayer la démo',btn_open:'Ouvrir la carte',btn_request:'Avoir sa propre carte',
+alt_overview:'Anoikis Traveler affichant une chaîne de wormholes avec les pilotes, les connexions et le panneau Thera',
+feat_title:'Fonctions',feat_lead:'Tout ce qu\'un groupe wormhole utilise pour scanner, fermer des trous et rentrer, sur un seul écran.',
+f1_t:'Suivi automatique',f1_p:'La carte suit votre personnage : chaque système où vous sautez est ajouté avec sa connexion, en direct.',
+f2_t:'Partagée avec le groupe',f2_p:'Tout le monde voit la même chaîne et la position de chaque pilote. Vert : carte ouverte ; badge EVE : en jeu.',
+f3_t:'Détail des connexions',f3_p:'Type de trou, état de masse, fin de vie, calculateur de masse et journal des passages partagé avec tout le groupe.',
+f4_t:'Thera et Turnur',f4_p:'Données EVE-Scout en direct. Les hubs restent à l\'écart et ne rejoignent votre chaîne que si vous y êtes connecté.',
+f5_t:'Routes vers les hubs',f5_p:'Jita, Amarr, Dodixie, Rens et Hek : la route la plus courte, la plus sûre, et la plus courte sans passer par Thera ni Turnur.',
+f6_t:'Alertes de danger',f6_p:'Les kills récents sont signalés sur la carte, avec une alarme dès qu\'un système compte 3 kills ou plus en 10 minutes.',
+f7_t:'Vue 3D',f7_p:'Faites tourner la chaîne en 3D autour du système sélectionné pour lire les grandes chaînes d\'un coup d\'œil.',
+f8_t:'Assets et destination',f8_p:'Voyez où vos personnages ont des assets, recevez un rappel après chaque saut, et envoyez une route directement dans votre client EVE.',
+shots_title:'Captures d\'écran',shots_lead:'Prises dans la démo, que vous pouvez essayer sans vous connecter.',
+cap_system:'Un système sélectionné et son détail',cap_system_html:'<b>Détail d\'un système.</b> Cliquez sur un système : classe, région, kills récents, notes partagées, signatures et route depuis vous.',
+cap_thera:'Thera reliée à la chaîne',cap_thera_html:'<b>Thera et Turnur.</b> Chaque sortie avec sa taille, son temps restant et le nombre de sauts depuis votre système.',
+cap_3d:'La vue 3D',cap_3d_html:'<b>Vue 3D.</b> La chaîne tourne autour du système sélectionné ; les sorties des hubs sont réparties en hauteur.',
+cap_chain:'Une chaîne de wormholes',cap_chain_html:'<b>La chaîne.</b> Les couleurs indiquent la classe des systèmes, le style des traits l\'état de chaque connexion.',
+tut_title:'Tutoriel',tut_lead:'Dix étapes, de la première connexion à une chaîne partagée par tout le groupe. Vous pouvez tout essayer d\'abord dans la démo.',
+s1_t:'Se connecter avec EVE',
+s1_p:'<p>Cliquez sur <span class="k">EVE login</span>. Vous vous connectez sur la page officielle de CCP : la carte ne voit jamais votre mot de passe.</p><p>Acceptez les autorisations : <b>position, statut en ligne et vaisseau</b> servent à vous suivre. <b>Waypoints, assets et structures</b> sont facultatifs et activent les fonctions correspondantes.</p>',
+s2_t:'Volez : votre trace se dessine',
+s2_p:'<p>Chaque saut ajoute le nouveau système et la connexion empruntée. Votre système est marqué <b>▼ You</b>, et vos camarades apparaissent sur leur propre système.</p><p>Le panneau <b>Pilots</b> liste tout le monde : point vert = carte ouverte, badge <span class="k ok">EVE</span> = en jeu.</p>',
+s3_t:'Lire un système',
+s3_p:'<p>Cliquez sur un système pour voir sa classe, ses statics, son effet, les kills de la dernière heure, la route depuis vous et les notes partagées du groupe (résidents, structures, dangers).</p><p>Pour vous déplacer : glissez un système pour le placer, molette pour zoomer, glissez le fond pour bouger la vue. <span class="k">Recenter</span> recentre sur le système sélectionné.</p>',
+s4_t:'Coller vos signatures',
+s4_p:'<p>Dans le scanner de sondes du jeu, faites <kbd>Ctrl</kbd>+<kbd>A</kbd> puis <kbd>Ctrl</kbd>+<kbd>C</kbd>, collez dans la case <b>Signatures</b> du système, puis cliquez sur <span class="k">Import</span>. Cochez <i>Remove signatures that are gone</i> pour effacer les anciennes.</p>',
+s5_t:'Renseigner les connexions',
+s5_p:'<p>Cliquez sur une connexion pour indiquer le type de trou (ex. H296), sa masse et sa fin de vie. Le calculateur de masse et <b>Add a pass</b> suivent la masse restante, pour tout le groupe.</p>',
+lg_stable:'Wormhole stable',lg_mass:'Masse réduite',lg_crit:'Masse critique',lg_eol:'Fin de vie (EOL)',lg_gate:'Portail stellaire',
+s6_t:'ENTER, EXIT et Home',
+s6_p:'<p><span class="k gold">ENTER</span> marque votre système actuel comme l\'entrée, <span class="k ok">EXIT</span> comme la sortie pour rentrer. Un second clic retire la marque. <span class="k">Home</span> définit votre base et <span class="k">My location</span> ramène la vue sur vous.</p>',
+s7_t:'Thera, Turnur et hubs de commerce',
+s7_p:'<p>Le bouton <span class="k">🌀 Thera / Turnur</span> affiche ou masque les hubs ; ils apparaissent d\'eux-mêmes quand votre chaîne s\'y relie. Dans le panneau de droite :</p><ul><li><b>Thera / Turnur</b> : chaque sortie, triée par nombre de sauts depuis votre système, sans passer par l\'autre hub ; un raccourci par l\'autre hub n\'apparaît que s\'il est plus court.</li><li><b>Routes to trade hubs</b> : la plus courte, la plus sûre, et la plus courte sans aucun des deux hubs.</li></ul>',
+s8_t:'Envoyer une route dans EVE',
+s8_p:'<p>Dans le panneau d\'un système, <span class="k">Set destination</span> ou <span class="k">Add waypoint</span> envoie la route directement dans votre client EVE (autorisation waypoints nécessaire).</p>',
+s9_t:'Vue 3D et assets',
+s9_p:'<p><span class="k">3D view</span> fait tourner la chaîne autour du système sélectionné : glisser pour tourner, <kbd>Maj</kbd>+glisser pour déplacer, molette pour zoomer.</p><p><span class="k">📦 Assets</span> marque les systèmes où vos personnages ont des assets. Après chaque saut de wormhole, une fenêtre liste ceux qui sont à la portée choisie.</p>',
+s10_t:'Partager avec le groupe',
+s10_p:'<p>Le propriétaire de la carte ouvre <span class="k">Access</span> et invite jusqu\'à <b>2 autres personnages</b>, en modification ou en lecture seule. Ils se connectent sur la même page et arrivent directement sur votre carte. Personne d\'autre ne la voit.</p>',
+req_title:'Avoir sa propre carte',req_lead:'Les cartes sont gratuites mais les places sont limitées : chaque demande est validée à la main.',
+req_how:'Comment demander',
+req_steps:'<li>Connectez-vous à EVE avec le personnage qui sera <b>propriétaire</b> de la carte du groupe (en général le directeur de la corporation).</li><li>Depuis ce personnage, envoyez un <b>mail EVE privé</b> à <b>Sava Yesh</b> avec l\'objet <b>Map request</b>.</li><li>Vous recevez un mail EVE en retour une fois la demande validée.</li><li>Ouvrez la carte et connectez-vous avec ce personnage : votre carte s\'ouvre automatiquement. Invitez jusqu\'à 2 autres personnages depuis <b>Access</b>.</li>',
+req_what:'Quoi envoyer',req_what_p:'<p>Le mail suffit : l\'expéditeur est le personnage qui sera propriétaire. Vous pouvez ajouter votre corporation et l\'usage prévu.</p>',
+copy_name:'Copier le nom',copy_subject:'Copier l\'objet',copied:'Copié',
+faq_title:'Questions fréquentes',
+q1:'C\'est gratuit ?',a1:'Oui. Les dons sont les bienvenus mais ne débloquent rien : tout le monde a la même carte.',
+q2:'Mon compte est-il en sécurité ?',a2:'Vous vous connectez sur la page officielle EVE SSO de CCP : la carte ne voit jamais votre mot de passe. Elle lit seulement ce que vous autorisez (position, vaisseau, assets) et ne peut écrire que des waypoints. Vous pouvez retirer l\'accès à tout moment sur le site d\'EVE, rubrique applications tierces.',
+q3:'Qui peut voir ma carte ?',a3:'Seulement le propriétaire et les personnages qu\'il invite. La carte de chaque groupe est privée.',
+q4:'Faut-il installer quelque chose ?',a4:'Non. Tout se passe dans le navigateur, idéalement sur ordinateur à côté du client EVE.',
+q5:'Est-ce autorisé par CCP ?',a5:'La carte utilise l\'interface officielle ESI de CCP, comme les autres outils tiers d\'EVE. C\'est un projet de fan, non affilié à CCP ni approuvé par CCP.',
+q6:'D\'où viennent les données Thera et Turnur ?',a6:'D\'EVE-Scout, tenu par Signal Cartel, mis à jour toutes les 5 minutes.',
+sup_title:'Soutenir le projet',sup_lead:'Anoikis Traveler est gratuit et sans publicité. S\'il vous plaît, voici deux façons d\'aider.',
+isk_t:'Envoyer des ISK',isk_p:'En jeu, donnez des ISK au personnage ci-dessous. Chaque don aide à faire tourner la carte.',isk_note:'Un don ne donne aucun accès en plus : tout le monde a la même carte.',
+raf_t:'Nouveau sur EVE ? Rejoignez-nous',raf_p:'Créez votre compte EVE Online avec le lien de parrainage de cloporte : vous recevez le bonus de bienvenue de CCP et vous soutenez le projet.',raf_btn:'Créer un compte EVE',raf_note:'Programme officiel de parrainage de CCP. Les récompenses sont fixées par CCP.',
+rights:'Tous droits réservés.',ccp:'EVE Online ainsi que les noms et images associés sont la propriété de CCP hf. Cet outil n\'est ni affilié à CCP hf, ni approuvé par CCP hf.'
+},
+de:{
+nav_features:'Funktionen',nav_tutorial:'Anleitung',nav_request:'Eigene Karte',nav_faq:'FAQ',nav_support:'Unterstützen',
+hero_tag:'Ein gemeinsamer Wurmloch-Mapper für EVE Online, der deiner Spur durch Anoikis folgt.',
+hero_sub:'Mit EVE einloggen und losfliegen: Jeder Sprung landet live auf der Karte deiner Gruppe. Thera- und Turnur-Verbindungen, Routen zu den Handelszentren und eine 3D-Ansicht sind eingebaut. Kostenlos, privat, keine Installation.',
+btn_demo:'Demo ausprobieren',btn_open:'Karte öffnen',btn_request:'Eigene Karte anfragen',
+alt_overview:'Anoikis Traveler mit einer Wurmlochkette, Piloten, Verbindungen und dem Thera-Bereich',
+feat_title:'Funktionen',feat_lead:'Alles, was eine Wurmloch-Gruppe zum Scannen, Rollen und Heimkommen braucht, auf einem Bildschirm.',
+f1_t:'Automatisches Tracking',f1_p:'Die Karte folgt deinem Charakter: Jedes System, in das du springst, wird samt Verbindung live hinzugefügt.',
+f2_t:'Mit der Gruppe geteilt',f2_p:'Alle sehen dieselbe Kette und wo jeder Pilot ist. Grün heißt Karte offen, das EVE-Abzeichen heißt im Spiel.',
+f3_t:'Verbindungsdetails',f3_p:'Wurmlochtyp, Massezustand, Lebensende, Masserechner und ein Protokoll der Durchflüge für die ganze Gruppe.',
+f4_t:'Thera & Turnur',f4_p:'Live-Daten von EVE-Scout. Die Hubs bleiben außen vor und kommen erst in deine Kette, wenn du mit ihnen verbunden bist.',
+f5_t:'Routen zu Handelszentren',f5_p:'Jita, Amarr, Dodixie, Rens und Hek: kürzeste Route, sicherste Route und kürzeste Route ohne Thera und Turnur.',
+f6_t:'Gefahrenwarnungen',f6_p:'Aktuelle Kills werden auf der Karte markiert, mit Alarm, sobald ein System 3 oder mehr Kills in 10 Minuten hat.',
+f7_t:'3D-Ansicht',f7_p:'Drehe die Kette in 3D um das ausgewählte System, um auch große Ketten auf einen Blick zu lesen.',
+f8_t:'Assets & Ziel',f8_p:'Sieh, wo deine Charaktere Assets haben, erhalte nach jedem Sprung einen Hinweis und schicke Routen direkt an deinen EVE-Client.',
+shots_title:'Screenshots',shots_lead:'Aus der Demo, die du ohne Login ausprobieren kannst.',
+cap_system:'Ein ausgewähltes System mit Details',cap_system_html:'<b>Systemdetails.</b> Klicke auf ein System: Klasse, Region, aktuelle Kills, geteilte Notizen, Signaturen und die Route von dir aus.',
+cap_thera:'Thera mit der Kette verbunden',cap_thera_html:'<b>Thera & Turnur.</b> Jeder Ausgang mit Größe, Restzeit und Sprüngen von deinem aktuellen System.',
+cap_3d:'Die 3D-Ansicht',cap_3d_html:'<b>3D-Ansicht.</b> Die Kette dreht sich um das ausgewählte System; die Hub-Ausgänge sind in der Höhe verteilt.',
+cap_chain:'Eine Wurmlochkette',cap_chain_html:'<b>Die Kette.</b> Farben zeigen die Systemklasse, Linienstile den Zustand jeder Verbindung.',
+tut_title:'Anleitung',tut_lead:'Zehn Schritte vom ersten Login bis zur geteilten Kette. Alles lässt sich vorher in der Demo üben.',
+s1_t:'Mit EVE einloggen',
+s1_p:'<p>Klicke auf <span class="k">EVE login</span>. Du meldest dich auf der offiziellen Seite von CCP an: Die Karte sieht dein Passwort nie.</p><p>Bestätige die Berechtigungen: <b>Standort, Online-Status und Schiff</b> braucht die Karte, um dir zu folgen. <b>Wegpunkte, Assets und Strukturen</b> sind optional und schalten die passenden Funktionen frei.</p>',
+s2_t:'Fliegen: deine Spur zeichnet sich selbst',
+s2_p:'<p>Jeder Sprung fügt das neue System und die genutzte Verbindung hinzu. Dein System ist mit <b>▼ You</b> markiert, deine Corp-Kameraden erscheinen in ihren Systemen.</p><p>Der Bereich <b>Pilots</b> listet alle: grüner Punkt = Karte offen, Abzeichen <span class="k ok">EVE</span> = im Spiel.</p>',
+s3_t:'Ein System lesen',
+s3_p:'<p>Klicke auf ein System für Klasse, Statics, Effekt, Kills der letzten Stunde, die Route von dir und geteilte Notizen der Gruppe (Bewohner, Strukturen, Gefahren).</p><p>Navigation: System ziehen zum Platzieren, Mausrad zum Zoomen, Hintergrund ziehen zum Verschieben. <span class="k">Recenter</span> zentriert auf das ausgewählte System.</p>',
+s4_t:'Signaturen einfügen',
+s4_p:'<p>Im Sondenscanner im Spiel <kbd>Strg</kbd>+<kbd>A</kbd> und dann <kbd>Strg</kbd>+<kbd>C</kbd> drücken, in das Feld <b>Signatures</b> des Systems einfügen und auf <span class="k">Import</span> klicken. Mit <i>Remove signatures that are gone</i> werden alte entfernt.</p>',
+s5_t:'Verbindungen eintragen',
+s5_p:'<p>Klicke auf eine Verbindung, um den Wurmlochtyp (z. B. H296), die Masse und das Lebensende einzutragen. Masserechner und <b>Add a pass</b> verfolgen die Restmasse für die ganze Gruppe.</p>',
+lg_stable:'Stabiles Wurmloch',lg_mass:'Masse reduziert',lg_crit:'Masse kritisch',lg_eol:'Lebensende (EOL)',lg_gate:'Stargate',
+s6_t:'ENTER, EXIT und Home',
+s6_p:'<p><span class="k gold">ENTER</span> markiert dein aktuelles System als Eingang, <span class="k ok">EXIT</span> als Weg nach Hause. Ein zweiter Klick entfernt die Markierung. <span class="k">Home</span> legt deine Basis fest, <span class="k">My location</span> springt zu dir.</p>',
+s7_t:'Thera, Turnur und Handelszentren',
+s7_p:'<p>Der Knopf <span class="k">🌀 Thera / Turnur</span> blendet die Hubs ein oder aus; sie erscheinen von selbst, wenn deine Kette mit ihnen verbunden ist. Im rechten Bereich:</p><ul><li><b>Thera / Turnur</b>: jeder Ausgang, sortiert nach Sprüngen von deinem System, ohne den anderen Hub; eine Abkürzung über den anderen Hub wird nur gezeigt, wenn sie kürzer ist.</li><li><b>Routes to trade hubs</b>: kürzeste, sicherste und kürzeste ohne beide Hubs.</li></ul>',
+s8_t:'Route an EVE senden',
+s8_p:'<p>Im Bereich eines Systems schickt <span class="k">Set destination</span> oder <span class="k">Add waypoint</span> die Route direkt an deinen EVE-Client (Wegpunkt-Berechtigung nötig).</p>',
+s9_t:'3D-Ansicht und Assets',
+s9_p:'<p><span class="k">3D view</span> dreht die Kette um das ausgewählte System: ziehen zum Drehen, <kbd>Umschalt</kbd>+ziehen zum Verschieben, Mausrad zum Zoomen.</p><p><span class="k">📦 Assets</span> markiert Systeme, in denen deine Charaktere Assets haben. Nach jedem Wurmlochsprung listet ein Fenster die in deiner gewählten Reichweite.</p>',
+s10_t:'Mit der Gruppe teilen',
+s10_p:'<p>Der Kartenbesitzer öffnet <span class="k">Access</span> und lädt bis zu <b>2 weitere Charaktere</b> ein, mit Bearbeitungs- oder Leserechten. Sie loggen sich auf derselben Seite ein und landen automatisch auf deiner Karte. Niemand sonst sieht sie.</p>',
+req_title:'Eigene Karte bekommen',req_lead:'Karten sind kostenlos, aber die Plätze sind begrenzt: Jede Anfrage wird von Hand freigegeben.',
+req_how:'So fragst du an',
+req_steps:'<li>Logge dich in EVE mit dem Charakter ein, der die Karte deiner Gruppe <b>besitzen</b> soll (meist der Direktor deiner Corporation).</li><li>Schicke von diesem Charakter eine <b>private EVE-Mail</b> an <b>Sava Yesh</b> mit dem Betreff <b>Map request</b>.</li><li>Nach der Freigabe bekommst du eine EVE-Mail zurück.</li><li>Öffne die Karte und logge dich mit diesem Charakter ein: Deine Karte öffnet sich automatisch. Lade bis zu 2 weitere Charaktere über <b>Access</b> ein.</li>',
+req_what:'Was du schicken musst',req_what_p:'<p>Nur die Mail: Der Absender ist der Charakter, der die Karte besitzen wird. Du kannst deine Corporation und den geplanten Einsatz dazuschreiben.</p>',
+copy_name:'Namen kopieren',copy_subject:'Betreff kopieren',copied:'Kopiert',
+faq_title:'FAQ',
+q1:'Ist es kostenlos?',a1:'Ja. Spenden sind willkommen, schalten aber nichts frei: Alle bekommen dieselbe Karte.',
+q2:'Ist mein Konto sicher?',a2:'Du meldest dich über die offizielle EVE-SSO-Seite von CCP an, die Karte sieht dein Passwort nie. Sie liest nur, was du erlaubst (Standort, Schiff, Assets), und kann nur Wegpunkte setzen. Den Zugriff kannst du jederzeit auf der EVE-Website unter Drittanbieter-Anwendungen widerrufen.',
+q3:'Wer kann meine Karte sehen?',a3:'Nur der Besitzer und die Charaktere, die er einlädt. Jede Gruppenkarte ist privat.',
+q4:'Muss ich etwas installieren?',a4:'Nein. Alles läuft im Browser, am besten auf dem Computer neben dem EVE-Client.',
+q5:'Ist das von CCP erlaubt?',a5:'Die Karte nutzt die offizielle ESI-Schnittstelle von CCP, wie andere EVE-Tools von Drittanbietern. Es ist ein Fanprojekt, nicht mit CCP verbunden und nicht von CCP unterstützt.',
+q6:'Woher kommen die Thera- und Turnur-Daten?',a6:'Von EVE-Scout, betrieben von Signal Cartel, alle 5 Minuten aktualisiert.',
+sup_title:'Projekt unterstützen',sup_lead:'Anoikis Traveler ist kostenlos und werbefrei. Wenn es dir gefällt, gibt es zwei Wege zu helfen.',
+isk_t:'ISK senden',isk_p:'Gib im Spiel dem Charakter unten ISK. Jede Spende hilft, die Karte am Laufen zu halten.',isk_note:'Eine Spende gibt keinen zusätzlichen Zugang: Alle bekommen dieselbe Karte.',
+raf_t:'Neu bei EVE? Mit unserem Link starten',raf_p:'Erstelle dein EVE-Online-Konto über den Freundschaftswerbungs-Link von cloporte: Du erhältst den Willkommensbonus von CCP und unterstützt das Projekt.',raf_btn:'EVE-Konto erstellen',raf_note:'Offizielles „Recruit a Friend“-Programm von CCP. Die Belohnungen legt CCP fest.',
+rights:'Alle Rechte vorbehalten.',ccp:'EVE Online sowie alle zugehörigen Namen und Bilder sind Eigentum von CCP hf. Dieses Tool ist weder mit CCP hf verbunden noch von CCP hf unterstützt.'
+},
+es:{
+nav_features:'Funciones',nav_tutorial:'Tutorial',nav_request:'Tu mapa',nav_faq:'FAQ',nav_support:'Apoyar',
+hero_tag:'Un mapa de agujeros de gusano compartido para EVE Online que sigue tu rastro por Anoikis.',
+hero_sub:'Inicia sesión con EVE y vuela: cada salto se añade en directo al mapa de tu grupo. Conexiones de Thera y Turnur, rutas a los centros comerciales y vista 3D incluidas. Gratis, privado y sin instalar nada.',
+btn_demo:'Probar la demo',btn_open:'Abrir el mapa',btn_request:'Pedir tu propio mapa',
+alt_overview:'Anoikis Traveler mostrando una cadena de agujeros de gusano con pilotos, conexiones y el panel de Thera',
+feat_title:'Funciones',feat_lead:'Todo lo que un grupo de agujeros de gusano necesita para explorar, cerrar agujeros y volver a casa, en una sola pantalla.',
+f1_t:'Seguimiento automático',f1_p:'El mapa sigue a tu personaje: cada sistema al que saltas se añade con su conexión, en directo.',
+f2_t:'Compartido con tu grupo',f2_p:'Todos ven la misma cadena y dónde está cada piloto. Verde: mapa abierto; insignia EVE: en el juego.',
+f3_t:'Detalle de conexiones',f3_p:'Tipo de agujero, estado de masa, fin de vida, calculadora de masa y registro de pasos compartido con todo el grupo.',
+f4_t:'Thera y Turnur',f4_p:'Datos de EVE-Scout en directo. Los hubs se quedan aparte y solo se unen a tu cadena cuando estás conectado a ellos.',
+f5_t:'Rutas a centros comerciales',f5_p:'Jita, Amarr, Dodixie, Rens y Hek: la ruta más corta, la más segura y la más corta sin pasar por Thera ni Turnur.',
+f6_t:'Alertas de peligro',f6_p:'Las muertes recientes se marcan en el mapa, con alarma cuando un sistema tiene 3 o más en 10 minutos.',
+f7_t:'Vista 3D',f7_p:'Gira la cadena en 3D alrededor del sistema seleccionado para leer cadenas grandes de un vistazo.',
+f8_t:'Activos y destino',f8_p:'Mira dónde tienen activos tus personajes, recibe un aviso tras cada salto y envía una ruta directamente a tu cliente de EVE.',
+shots_title:'Capturas',shots_lead:'Tomadas de la demo, que puedes probar sin iniciar sesión.',
+cap_system:'Un sistema seleccionado con sus detalles',cap_system_html:'<b>Detalle del sistema.</b> Haz clic en un sistema: clase, región, muertes recientes, notas compartidas, firmas y la ruta desde ti.',
+cap_thera:'Thera conectada a la cadena',cap_thera_html:'<b>Thera y Turnur.</b> Cada salida con su tamaño, el tiempo que le queda y los saltos desde tu sistema actual.',
+cap_3d:'La vista 3D',cap_3d_html:'<b>Vista 3D.</b> La cadena gira alrededor del sistema seleccionado; las salidas de los hubs se reparten en altura.',
+cap_chain:'Una cadena de agujeros de gusano',cap_chain_html:'<b>La cadena.</b> Los colores indican la clase del sistema y el estilo de las líneas el estado de cada conexión.',
+tut_title:'Tutorial',tut_lead:'Diez pasos desde el primer inicio de sesión hasta una cadena compartida. Puedes practicarlo todo antes en la demo.',
+s1_t:'Iniciar sesión con EVE',
+s1_p:'<p>Haz clic en <span class="k">EVE login</span>. Inicias sesión en la página oficial de CCP: el mapa nunca ve tu contraseña.</p><p>Acepta los permisos: <b>ubicación, estado en línea y nave</b> sirven para seguirte. <b>Puntos de ruta, activos y estructuras</b> son opcionales y activan las funciones correspondientes.</p>',
+s2_t:'Vuela: tu rastro se dibuja solo',
+s2_p:'<p>Cada salto añade el nuevo sistema y la conexión usada. Tu sistema aparece marcado <b>▼ You</b> y tus compañeros aparecen en sus sistemas.</p><p>El panel <b>Pilots</b> muestra a todos: punto verde = mapa abierto, insignia <span class="k ok">EVE</span> = en el juego.</p>',
+s3_t:'Leer un sistema',
+s3_p:'<p>Haz clic en un sistema para ver su clase, estáticos, efecto, muertes de la última hora, la ruta desde ti y las notas compartidas del grupo (residentes, estructuras, peligros).</p><p>Para moverte: arrastra un sistema para colocarlo, rueda para hacer zoom, arrastra el fondo para desplazarte. <span class="k">Recenter</span> vuelve al sistema seleccionado.</p>',
+s4_t:'Pegar tus firmas',
+s4_p:'<p>En el escáner de sondas del juego pulsa <kbd>Ctrl</kbd>+<kbd>A</kbd> y luego <kbd>Ctrl</kbd>+<kbd>C</kbd>, pega en la casilla <b>Signatures</b> del sistema y haz clic en <span class="k">Import</span>. Marca <i>Remove signatures that are gone</i> para borrar las antiguas.</p>',
+s5_t:'Anotar las conexiones',
+s5_p:'<p>Haz clic en una conexión para indicar el tipo de agujero (p. ej. H296), su masa y su fin de vida. La calculadora de masa y <b>Add a pass</b> siguen la masa restante para todo el grupo.</p>',
+lg_stable:'Agujero estable',lg_mass:'Masa reducida',lg_crit:'Masa crítica',lg_eol:'Fin de vida (EOL)',lg_gate:'Puerta estelar',
+s6_t:'ENTER, EXIT y Home',
+s6_p:'<p><span class="k gold">ENTER</span> marca tu sistema actual como la entrada y <span class="k ok">EXIT</span> como el camino a casa. Un segundo clic quita la marca. <span class="k">Home</span> define tu base y <span class="k">My location</span> lleva la vista hasta ti.</p>',
+s7_t:'Thera, Turnur y centros comerciales',
+s7_p:'<p>El botón <span class="k">🌀 Thera / Turnur</span> muestra u oculta los hubs; aparecen solos cuando tu cadena se conecta a ellos. En el panel derecho:</p><ul><li><b>Thera / Turnur</b>: cada salida, ordenada por saltos desde tu sistema, sin pasar por el otro hub; un atajo por el otro hub solo aparece si es más corto.</li><li><b>Routes to trade hubs</b>: la más corta, la más segura y la más corta evitando ambos hubs.</li></ul>',
+s8_t:'Enviar una ruta a EVE',
+s8_p:'<p>En el panel de un sistema, <span class="k">Set destination</span> o <span class="k">Add waypoint</span> envía la ruta directamente a tu cliente de EVE (requiere el permiso de puntos de ruta).</p>',
+s9_t:'Vista 3D y activos',
+s9_p:'<p><span class="k">3D view</span> gira la cadena alrededor del sistema seleccionado: arrastra para girar, <kbd>Mayús</kbd>+arrastrar para desplazar, rueda para hacer zoom.</p><p><span class="k">📦 Assets</span> marca los sistemas donde tus personajes tienen activos. Tras cada salto de agujero de gusano, una ventana lista los que están dentro del alcance que elijas.</p>',
+s10_t:'Compartir con tu grupo',
+s10_p:'<p>El propietario del mapa abre <span class="k">Access</span> e invita hasta <b>2 personajes más</b>, con permiso de edición o solo lectura. Inician sesión en la misma página y llegan directamente a tu mapa. Nadie más puede verlo.</p>',
+req_title:'Tener tu propio mapa',req_lead:'Los mapas son gratis, pero las plazas son limitadas: cada solicitud se aprueba a mano.',
+req_how:'Cómo pedirlo',
+req_steps:'<li>Entra en EVE con el personaje que será el <b>propietario</b> del mapa de tu grupo (normalmente el director de tu corporación).</li><li>Desde ese personaje, envía un <b>correo privado de EVE</b> a <b>Sava Yesh</b> con el asunto <b>Map request</b>.</li><li>Recibirás un correo de EVE cuando esté aprobado.</li><li>Abre el mapa e inicia sesión con ese personaje: tu mapa se abre automáticamente. Invita hasta 2 personajes más desde <b>Access</b>.</li>',
+req_what:'Qué enviar',req_what_p:'<p>Solo el correo: el remitente es el personaje que será propietario. Puedes añadir tu corporación y para qué lo vas a usar.</p>',
+copy_name:'Copiar nombre',copy_subject:'Copiar asunto',copied:'Copiado',
+faq_title:'Preguntas frecuentes',
+q1:'¿Es gratis?',a1:'Sí. Las donaciones son bienvenidas pero no desbloquean nada: todos tienen el mismo mapa.',
+q2:'¿Mi cuenta está segura?',a2:'Inicias sesión en la página oficial EVE SSO de CCP, así que el mapa nunca ve tu contraseña. Solo lee lo que permitas (ubicación, nave, activos) y solo puede escribir puntos de ruta. Puedes revocar el acceso en cualquier momento en la web de EVE, en aplicaciones de terceros.',
+q3:'¿Quién puede ver mi mapa?',a3:'Solo el propietario y los personajes que invite. El mapa de cada grupo es privado.',
+q4:'¿Tengo que instalar algo?',a4:'No. Funciona en el navegador, mejor en un ordenador junto al cliente de EVE.',
+q5:'¿Lo permite CCP?',a5:'Usa la interfaz oficial ESI de CCP, como otras herramientas de terceros para EVE. Es un proyecto de fans, sin relación con CCP ni respaldado por CCP.',
+q6:'¿De dónde salen los datos de Thera y Turnur?',a6:'De EVE-Scout, gestionado por Signal Cartel, actualizado cada 5 minutos.',
+sup_title:'Apoyar el proyecto',sup_lead:'Anoikis Traveler es gratis y sin publicidad. Si te gusta, hay dos formas de ayudar.',
+isk_t:'Enviar ISK',isk_p:'En el juego, da ISK al personaje de abajo. Cada donación ayuda a mantener el mapa en marcha.',isk_note:'Donar no da acceso extra: todos tienen el mismo mapa.',
+raf_t:'¿Nuevo en EVE? Únete con nuestro enlace',raf_p:'Crea tu cuenta de EVE Online con el enlace de invitación de cloporte: recibes el bono de bienvenida de CCP y apoyas el proyecto.',raf_btn:'Crear una cuenta de EVE',raf_note:'Programa oficial «Recruit a Friend» de CCP. Las recompensas las fija CCP.',
+rights:'Todos los derechos reservados.',ccp:'EVE Online y todos los nombres e imágenes relacionados son propiedad de CCP hf. Esta herramienta no está afiliada ni respaldada por CCP hf.'
+}};
+const LANGS = Object.keys(T);
+const $ = s => document.querySelector(s);
+function pick(){
+  const q = new URLSearchParams(location.search).get('lang');
+  if (LANGS.includes(q)) return q;
+  try{ const s = localStorage.getItem('at.lang'); if (LANGS.includes(s)) return s; }catch(e){}
+  for (const l of navigator.languages || [navigator.language || 'en']){ const c = String(l).slice(0, 2).toLowerCase(); if (LANGS.includes(c)) return c; }
+  return 'en';
+}
+let lang = pick();
+function apply(l){
+  lang = l; const d = T[l];
+  document.documentElement.lang = l;
+  document.querySelectorAll('[data-i18n]').forEach(e => { const v = d[e.dataset.i18n]; if (v != null) e.innerHTML = v; });
+  document.querySelectorAll('[data-i18n-alt]').forEach(e => { e.alt = d[e.dataset.i18nAlt] || ''; });
+  document.querySelectorAll('.lang button').forEach(b => b.setAttribute('aria-pressed', b.dataset.lang === l));
+  $('#rafLink').href = `https://www.eveonline.com/${l === 'en' ? '' : l + '/'}signup?invc=${RAF}`;
+  try{ localStorage.setItem('at.lang', l); }catch(e){}
+  const u = new URL(location.href); u.searchParams.set('lang', l); history.replaceState(null, '', u);
+}
+document.querySelectorAll('.lang button').forEach(b => b.addEventListener('click', () => apply(b.dataset.lang)));
+document.addEventListener('click', async e => {
+  const c = e.target.closest('[data-copy]'); if (!c) return;
+  try{ await navigator.clipboard.writeText(c.dataset.copy); }catch(x){}
+  const t = $('#toast'); t.textContent = `${T[lang].copied}: ${c.dataset.copy}`; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 1600);
+});
+document.querySelectorAll('figure img, .shot img').forEach(i => i.addEventListener('click', () => { $('#lb img').src = i.src; $('#lb img').alt = i.alt; $('#lb').classList.add('on'); }));
+$('#lb').addEventListener('click', () => $('#lb').classList.remove('on'));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#lb').classList.remove('on'); });
+apply(lang);
+</script>
+</body>
+</html>
