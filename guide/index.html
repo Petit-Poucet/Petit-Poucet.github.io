@@ -487,6 +487,23 @@ document.querySelectorAll('figure img, .shot img').forEach(i => i.addEventListen
 $('#lb').addEventListener('click', () => $('#lb').classList.remove('on'));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#lb').classList.remove('on'); });
 apply(lang);
+/* Private visit counter: one count per browser per day, sent to the owner's server. Nothing is shown here. */
+(async () => {
+  try{
+    const q = new URLSearchParams(location.search);
+    if (q.has('nocount')) localStorage.setItem('at.nocount', '1');
+    if (localStorage.getItem('at.nocount') === '1') return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (localStorage.getItem('at.counted') === today) return;
+    const isNew = !localStorage.getItem('at.counted');
+    const cfg = await (await fetch('../dons/config.json', { cache:'no-store' })).json();
+    if (!cfg.worker) return;
+    const body = JSON.stringify({ lang, isNew });
+    const sent = navigator.sendBeacon && navigator.sendBeacon(cfg.worker.replace(/\/+$/, '') + '/hit', new Blob([body], { type:'text/plain' }));
+    if (!sent) fetch(cfg.worker.replace(/\/+$/, '') + '/hit', { method:'POST', body, headers:{ 'Content-Type':'text/plain' }, keepalive:true, mode:'cors' }).catch(() => {});
+    localStorage.setItem('at.counted', today);
+  }catch(e){}
+})();
 </script>
 </body>
 </html>

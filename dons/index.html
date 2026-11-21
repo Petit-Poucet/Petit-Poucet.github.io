@@ -40,7 +40,15 @@ button:disabled{opacity:.5}
 button.ok{background:var(--ok);border-color:var(--ok);color:#06210f;font-weight:700}
 button.no{background:transparent;border-color:var(--bad);color:var(--bad)}
 .hist{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:4px 0;color:var(--dim)}
-#demandes h3{margin:0 0 4px;font-size:15px}
+#demandes h3,#visites h3{margin:0 0 4px;font-size:15px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}
+.kpi{background:#0e1422;border:1px solid var(--line);border-radius:8px;padding:8px 6px;text-align:center}
+.kpi b{display:block;font:700 20px var(--mono);color:var(--gold)}.kpi span{font-size:11.5px;color:var(--dim)}
+.bars{display:flex;align-items:flex-end;gap:3px;height:70px;margin:10px 0 2px}
+.bars div{flex:1;background:var(--gold);border-radius:2px 2px 0 0;min-height:2px;opacity:.85}
+.bars div.today{background:var(--ok)}
+.axis{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
+.langs{font-size:12.5px;color:var(--dim);margin-top:6px}
 </style>
 </head>
 <body>
@@ -68,6 +76,7 @@ button.no{background:transparent;border-color:var(--bad);color:var(--bad)}
 
   <div id="mainView" hidden>
     <div class="card" id="demandes" hidden></div>
+    <div class="card" id="visites" hidden></div>
     <div class="card">
       <div class="note">Total reçu (100 derniers dons)</div>
       <div class="total" id="total">0 <small>ISK</small></div>
@@ -150,9 +159,10 @@ async function enableNotif(){
 /* the service worker reads the device key from IndexedDB (it has no access to localStorage) */
 function idbSet(k, v){ return new Promise(res => { const o = indexedDB.open('dons', 1); o.onupgradeneeded = () => o.result.createObjectStore('kv'); o.onsuccess = () => { const tx = o.result.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => res(); }; o.onerror = () => res(); }); }
 /* ---------- Donations list ---------- */
-let data = null;
+let data = null, stats = null;
 async function refreshList(){
   if (!dev) return;
+  try{ stats = await api('/stats?key=' + encodeURIComponent(dev.appKey)); }catch(e){ stats = null; }
   try{ data = await api('/donations?key=' + encodeURIComponent(dev.appKey)); }
   catch(e){ if (/Unknown device/.test(e.message)){ dev = null; store.set('dons.dev', null); } err(e.message); }
 }
@@ -169,10 +179,33 @@ function render(){
   $('#total').innerHTML = `${isk(ds.reduce((s, d) => s + d.amount, 0))} <small>ISK</small>`;
   const ago = data.lastCheck ? Math.round((Date.now() - data.lastCheck) / 60000) : null;
   $('#status').innerHTML = `${ago == null ? 'Pas encore vérifié' : `Vérifié il y a ${ago} min`} · <span class="pill${Notification.permission === 'granted' ? '' : ' off'}">${Notification.permission === 'granted' ? 'notifications actives' : 'notifications coupées'}</span>${data.lastError ? `<br><span class="bad">${esc(data.lastError)}</span>` : ''}`;
-  renderRequests();
+  renderRequests(); renderVisits();
   $('#list').innerHTML = ds.length ? ds.map(d => `<div class="don"><b>${esc(d.from || 'Pilote')}</b><span class="amt">+${isk(d.amount)}</span>
     <span class="when">${new Date(d.date).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</span><span></span>
     ${d.reason ? `<span class="why">« ${esc(d.reason)} »</span>` : ''}</div>`).join('') : '<span class="note">Aucun don reçu pour l\'instant.</span>';
+}
+/* ---------- Guide visits ---------- */
+function renderVisits(){
+  const box = $('#visites');
+  if (!stats || !stats.days){ box.hidden = true; return; }
+  const day = d => new Intl.DateTimeFormat('en-CA', { timeZone:'Europe/Paris', year:'numeric', month:'2-digit', day:'2-digit' }).format(d);
+  const last = n => Array.from({ length:n }, (_, i) => day(new Date(Date.now() - (n - 1 - i) * 864e5)));
+  const v = k => (stats.days[k] || {}).v || 0;
+  const sum = ks => ks.reduce((t, k) => t + v(k), 0);
+  const d14 = last(14), d30 = last(30), today = d14[13];
+  const fmt = k => v(k) >= 400 ? '400+' : v(k);
+  const max = Math.max(1, ...d14.map(v));
+  const langs = {}; let fresh = 0;
+  for (const k of d30){ const d = stats.days[k]; if (!d) continue; fresh += d.n || 0; for (const l in d.l || {}) langs[l] = (langs[l] || 0) + d.l[l]; }
+  const L = { en:'EN', fr:'FR', de:'DE', es:'ES', other:'autre' };
+  const tot30 = sum(d30);
+  box.innerHTML = `<h3>📈 Visites du guide</h3>
+    <div class="kpis"><div class="kpi"><b>${fmt(today)}</b><span>aujourd'hui</span></div><div class="kpi"><b>${sum(last(7))}</b><span>7 jours</span></div><div class="kpi"><b>${tot30}</b><span>30 jours</span></div><div class="kpi"><b>${stats.total || 0}</b><span>total</span></div></div>
+    <div class="bars">${d14.map(k => `<div class="${k === today ? 'today' : ''}" style="height:${Math.round(v(k) / max * 100)}%" title="${k.slice(8)}/${k.slice(5, 7)} : ${v(k)}"></div>`).join('')}</div>
+    <div class="axis"><span>${d14[0].slice(8)}/${d14[0].slice(5, 7)}</span><span>14 derniers jours</span><span>auj.</span></div>
+    <div class="langs">30 jours : ${tot30 ? Object.entries(langs).sort((a, b) => b[1] - a[1]).map(([l, n]) => `${L[l] || l} ${Math.round(n / tot30 * 100)} %`).join(' · ') + ` · nouveaux visiteurs ${Math.round(fresh / tot30 * 100)} %` : 'aucune visite pour l\'instant'}</div>
+    <p class="note" style="margin:8px 0 0">Une visite = un navigateur par jour. Ce téléphone n'est pas compté.</p>`;
+  box.hidden = false;
 }
 /* ---------- Map requests ---------- */
 const when = d => new Date(d).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
@@ -208,6 +241,7 @@ $('#btnResub').addEventListener('click', enableNotif);
 $('#btnCheck').addEventListener('click', async () => { err(''); $('#btnCheck').disabled = true; try{ const r = await api('/check', { appKey:dev.appKey }); await refreshList(); render(); if (r.lastError) err(r.lastError); }catch(e){ err(e.message); } $('#btnCheck').disabled = false; });
 $('#btnTest').addEventListener('click', async () => { err(''); try{ const r = await api('/test', { appKey:dev.appKey }); if (!r.sent) err('Aucun téléphone abonné : touchez « Réactiver sur ce téléphone ».'); }catch(e){ err(e.message); } });
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && dev){ await refreshList(); render(); } });
+try{ localStorage.setItem('at.nocount', '1'); }catch(e){}   // the owner's phone is not counted in the guide visits
 (async () => {
   try{ CFG = await (await fetch('config.json', { cache:'no-store' })).json(); }catch(e){}
   if (!CFG || !CFG.worker || !CFG.clientId){ err('config.json incomplet : indiquez l\'adresse du serveur et le Client ID.'); return; }
