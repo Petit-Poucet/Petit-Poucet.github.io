@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Le Petit Poucet Galactique</title>
+<title>Anoikis Traveler · Wormhole Mapper</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -267,8 +267,8 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 </head>
 <body>
 <header>
-  <h1>Le Petit Poucet <b>Galactique</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v5.9</span>
+  <h1>Anoikis <b>Traveler</b></h1>
+  <span class="ver" id="appVersion" title="Map version">v6.0</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -300,7 +300,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 
 <div class="layout">
   <div id="mapwrap">
-    <div id="lockMsg" hidden><div class="lbox"><h3>🔒 Private map</h3><p id="lockText"></p><div class="row" style="justify-content:center"><button type="button" class="primary" id="lockLogin">EVE login</button><a class="btn" href="?demo">Watch the demo</a></div><div class="getmap" id="getMapLock"></div></div></div>
+    <div id="lockMsg" hidden><div class="lbox"><h3>🔒 Private map</h3><p id="lockText"></p><div class="row" style="justify-content:center"><button type="button" class="primary" id="lockLogin">EVE login</button><a class="btn" href="?demo">Watch the demo</a><a class="btn" href="guide/">Guide</a></div><div class="getmap" id="getMapLock"></div></div></div>
     <svg id="map" aria-label="Systems map">
       <g id="vp"><g id="links"></g><g id="nodes"></g><g id="labels"></g></g>
     </svg>
@@ -388,7 +388,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
       <h2>Jump log</h2>
       <div id="log"><span class="empty">No jumps yet.</span></div>
     </section>
-    <p class="note" style="padding:10px 16px 16px;margin:0">© 2026 cloporte · Le Petit Poucet Galactique · All rights reserved.<br>EVE Online © CCP hf. Not affiliated with CCP.</p>
+    <p class="note" style="padding:10px 16px 16px;margin:0">© 2026 cloporte · Anoikis Traveler · All rights reserved · <a href="guide/" style="color:var(--accent)">Guide &amp; tutorial</a><br>EVE Online © CCP hf. Not affiliated with CCP.</p>
 </aside>
 </div>
 
@@ -488,7 +488,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
         <li><b>📦 Assets</b> shows where your characters have assets; after each wormhole jump, a window lists the ones within your chosen range.</li>
         <li><b>Set destination</b> (system panel) sends the route straight to your EVE client.</li>
       </ol>
-      <p class="note">© 2026 cloporte · Le Petit Poucet Galactique · All rights reserved, copying or redistribution not allowed.<br>EVE Online and all related names and images are the property of CCP hf. This tool is not affiliated with or endorsed by CCP.</p>
+      <p class="note"><a href="guide/" style="color:var(--accent)">Full guide &amp; tutorial (EN · FR · DE · ES)</a><br>© 2026 cloporte · Anoikis Traveler · All rights reserved, copying or redistribution not allowed.<br>EVE Online and all related names and images are the property of CCP hf. This tool is not affiliated with or endorsed by CCP.</p>
     </div>
     <div class="row"><button type="button" id="closeHelp">Close</button></div>
   </div>
@@ -503,7 +503,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '5.9';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '6.0';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
