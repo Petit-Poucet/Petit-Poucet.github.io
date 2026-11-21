@@ -33,6 +33,14 @@ button:disabled{opacity:.5}
 .steps{margin:6px 0 0 18px;padding:0;color:var(--dim);font-size:14px}
 .pill{display:inline-block;font:600 11px var(--mono);padding:2px 8px;border-radius:99px;background:#123222;color:var(--ok)}
 .pill.off{background:#3a1717;color:var(--bad)}
+.pill.wait{background:#3a2e10;color:var(--gold)}
+.req{padding:10px 0;border-top:1px solid var(--line)}.req:first-of-type{border-top:0}
+.req .nm{font-weight:700}.req .co{color:var(--dim);font-size:13px}
+.req .row{margin-top:8px}
+button.ok{background:var(--ok);border-color:var(--ok);color:#06210f;font-weight:700}
+button.no{background:transparent;border-color:var(--bad);color:var(--bad)}
+.hist{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:4px 0;color:var(--dim)}
+#demandes h3{margin:0 0 4px;font-size:15px}
 </style>
 </head>
 <body>
@@ -48,7 +56,7 @@ button:disabled{opacity:.5}
 
   <div class="card" id="loginCard" hidden>
     <b>1. Connexion EVE</b>
-    <p class="note">Connectez-vous avec le personnage qui reçoit les dons. L'appli demande seulement à lire son portefeuille.</p>
+    <p class="note">Connectez-vous avec le personnage qui reçoit les dons. L'appli demande à lire son portefeuille et ses mails (pour les demandes de carte), et à répondre par mail.</p>
     <button class="primary" id="btnLogin">Se connecter avec EVE</button>
   </div>
 
@@ -59,6 +67,7 @@ button:disabled{opacity:.5}
   </div>
 
   <div id="mainView" hidden>
+    <div class="card" id="demandes" hidden></div>
     <div class="card">
       <div class="note">Total reçu (100 derniers dons)</div>
       <div class="total" id="total">0 <small>ISK</small></div>
@@ -80,7 +89,7 @@ const $ = s => document.querySelector(s);
 const store = { get:(k, d) => { try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }, set:(k, v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} } };
 const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
-const SCOPE = 'esi-wallet.read_character_wallet.v1';
+const SCOPE = 'esi-wallet.read_character_wallet.v1 esi-mail.read_mail.v1 esi-mail.send_mail.v1';
 const redirect = location.origin + location.pathname.replace(/index\.html$/, '');
 let CFG = null, dev = store.get('dons.dev', null);   // { appKey, name }
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -160,10 +169,39 @@ function render(){
   $('#total').innerHTML = `${isk(ds.reduce((s, d) => s + d.amount, 0))} <small>ISK</small>`;
   const ago = data.lastCheck ? Math.round((Date.now() - data.lastCheck) / 60000) : null;
   $('#status').innerHTML = `${ago == null ? 'Pas encore vérifié' : `Vérifié il y a ${ago} min`} · <span class="pill${Notification.permission === 'granted' ? '' : ' off'}">${Notification.permission === 'granted' ? 'notifications actives' : 'notifications coupées'}</span>${data.lastError ? `<br><span class="bad">${esc(data.lastError)}</span>` : ''}`;
+  renderRequests();
   $('#list').innerHTML = ds.length ? ds.map(d => `<div class="don"><b>${esc(d.from || 'Pilote')}</b><span class="amt">+${isk(d.amount)}</span>
     <span class="when">${new Date(d.date).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</span><span></span>
     ${d.reason ? `<span class="why">« ${esc(d.reason)} »</span>` : ''}</div>`).join('') : '<span class="note">Aucun don reçu pour l\'instant.</span>';
 }
+/* ---------- Map requests ---------- */
+const when = d => new Date(d).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+function renderRequests(){
+  const box = $('#demandes'), rq = data.requests || [];
+  const pending = rq.filter(r => r.status === 'pending'), done = rq.filter(r => r.status !== 'pending').slice(0, 5);
+  let h = `<h3>🗺️ Demandes de carte${pending.length ? ` <span class="pill wait">${pending.length} en attente</span>` : ''}</h3>`;
+  if (!data.mailRead) h += `<p class="note">Pour recevoir les demandes envoyées par mail à ${esc(data.name || dev.name)}, reconnectez-vous une fois pour autoriser la lecture des mails.</p><button class="primary" data-relog>Se reconnecter avec EVE</button>`;
+  else {
+    if (!data.firebase) h += `<p class="note bad">Serveur : variables Firebase manquantes, la validation ne marchera pas encore.</p>`;
+    h += pending.length ? pending.map(r => `<div class="req"><div class="nm">${esc(r.name)}</div><div class="co">${esc(r.corp || 'Corporation inconnue')} · ${when(r.date)}</div><div class="co">Objet : « ${esc(r.subject)} »</div>
+      <div class="row"><button class="ok" data-ok="${r.mailId}">Valider</button><button class="no" data-no="${r.mailId}">Refuser</button></div></div>`).join('')
+      : '<p class="note">Aucune demande en attente.</p>';
+    if (done.length) h += '<div style="margin-top:8px">' + done.map(r => `<div class="hist"><span>${esc(r.name)} <small>${esc(r.corp)}</small></span><span>${r.status === 'approved' ? '✅ validée' + (r.mailed ? ' · mail envoyé' : '') : r.status === 'already' ? 'déjà propriétaire' : '❌ refusée'}</span></div>`).join('') + '</div>';
+    if (!data.mailSend) h += '<p class="note">La réponse automatique par mail est coupée : reconnectez-vous pour l\'autoriser.</p>';
+  }
+  box.innerHTML = h; box.hidden = false;
+}
+$('#demandes').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.hasAttribute('data-relog')) return login();
+  const id = b.dataset.ok || b.dataset.no; if (!id) return;
+  const r = (data.requests || []).find(x => String(x.mailId) === id);
+  const approve = !!b.dataset.ok;
+  if (approve && !confirm(`Donner une carte à ${r ? r.name : 'ce pilote'} ?`)) return;
+  err(''); b.disabled = true;
+  try{ const j = await api('/decide', { appKey:dev.appKey, mailId:Number(id), action:approve ? 'approve' : 'refuse' }); if (j.request && j.request.mailError) err(j.request.mailError); await refreshList(); render(); }
+  catch(x){ err(x.message); b.disabled = false; }
+});
 $('#btnLogin').addEventListener('click', () => login());
 $('#btnNotif').addEventListener('click', enableNotif);
 $('#btnResub').addEventListener('click', enableNotif);
@@ -176,6 +214,7 @@ document.addEventListener('visibilitychange', async () => { if (!document.hidden
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   await handleCallback();
   await refreshList(); render();
+  if (location.hash === '#demandes' && !$('#demandes').hidden) $('#demandes').scrollIntoView();
 })();
 </script>
 </body>
