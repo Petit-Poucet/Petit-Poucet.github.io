@@ -268,7 +268,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 <body>
 <header>
   <h1>Anoikis <b>Traveler</b></h1>
-  <span class="ver" id="appVersion" title="Map version">v6.0</span>
+  <span class="ver" id="appVersion" title="Map version">v6.1</span>
   <form id="addForm" autocomplete="off">
     <input id="addName" placeholder="Add a system…" aria-label="Name of the system to add">
     <button type="submit">Add</button>
@@ -503,7 +503,7 @@ label.f{display:grid;gap:4px;font-size:12px;color:var(--dim)}
 /* =========================================================
    Constantes et utilitaires
    ========================================================= */
-const APP_VERSION = '6.0';            // à augmenter à chaque mise à jour du fichier
+const APP_VERSION = '6.1';            // à augmenter à chaque mise à jour du fichier
 const APP_DATE = '20/11/2026';
 const ESI = 'https://esi.evetech.net/latest';
 const ESI_ROOT = 'https://esi.evetech.net';
@@ -1534,7 +1534,7 @@ function getMapHtml(){
   return `<h4>🗺️ Want your own map?</h4><ol>
 <li>Log in to EVE with the character that will <b>own</b> your group's map (usually your corporation's director).</li>
 <li>From that character, send a <b>private EVE mail</b> to <b>Sava Yesh</b> with the subject <b>Map request</b>.</li>
-<li>You will get an EVE mail back once it is approved. Then open <b>petit-poucet.github.io</b> and log in with that character: your own map opens automatically.</li>
+<li>You will get an EVE mail back once it is approved. Then open <b>${esc(location.host)}</b> and log in with that character: your own map opens automatically.</li>
 <li>Invite up to <b>2 more characters</b> from <i>Access</i>.</li></ol>
 <p class="gm-note">Free. Each map is private: no one else sees it. Places are limited, so requests are approved by hand.</p>`;
 }
